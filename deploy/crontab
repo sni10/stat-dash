@@ -1,0 +1,7 @@
+# supercronic, TZ=Europe/Kyiv (compose). Paths are relative to /app.
+
+# Weekly collection: Monday 04:17
+17 4 * * 1 python manage.py collect_lun --backup
+
+# Daily catch-up: collects only if the last successful run is older than 7 days (computer was off on Monday)
+30 12 * * * python manage.py collect_lun --if-stale --backup

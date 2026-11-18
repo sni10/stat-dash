@@ -1,0 +1,66 @@
+# Local stack. All settings come from .env (see .env.example).
+#   db        Postgres
+#   migrate   one-shot: applies migrations, then web and scheduler start
+#   web       Django admin: http://localhost:8010/admin/ (dashboard pages come in stage 2)
+#   scheduler supercronic with deploy/crontab: weekly collect_lun + daily catch-up (docker/scheduler.sh)
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    # .env holds the values for `uv run` on the host; inside the network these differ
+    DB_HOST: db
+    DB_PORT: "5432"
+    TZ: Europe/Kyiv
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:5435:5432"  # dev: uv runs, tests and the IDE connect here
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+
+  web:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8010:8000"
+    restart: unless-stopped
+
+  scheduler:
+    <<: *app
+    command: ["sh", "./docker/scheduler.sh"]
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      TZ: Europe/Kyiv
+      BACKUP_DIR: /backups
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:

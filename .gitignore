@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.idea/
+.junie/
+staticfiles/
+reports/
+.coverage
+htmlcov/
+.ruff_cache/
+backups/
+
+.claude/settings.local.json
+
+# local spec and notes
+ТЗ*.md

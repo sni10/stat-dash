@@ -1,0 +1,46 @@
+[project]
+name = "stat-dash"
+version = "0.1.0"
+description = "Personal dashboard of housing prices on LUN Statistics data: weekly collection into Postgres"
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.1",
+    "gunicorn>=23.0",
+    "httpx>=0.28",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.11",
+    "tzdata>=2025.2",
+    "whitenoise>=6.9",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "coverage>=7.10",
+    "unittest-xml-reporting>=3.2",
+]
+
+# Release versions come from Conventional Commits on main (python-semantic-release in CI):
+# fix -> patch, feat -> minor, "!" / BREAKING CHANGE -> major (minor while < 1.0). Source of truth: git tags vX.Y.Z.
+[tool.semantic_release]
+tag_format = "v{version}"
+commit_parser = "conventional"
+allow_zero_version = true
+major_on_zero = false
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+# CI: `coverage run manage.py test` -> reports in the test-reports artifact
+[tool.coverage.run]
+branch = true
+source = ["collector", "config"]
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

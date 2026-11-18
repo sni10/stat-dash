@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.junie
+.venv
+**/__pycache__
+*.pyc
+.env
+staticfiles
+backups
+reports
+.coverage
+htmlcov
+*.md
