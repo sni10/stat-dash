@@ -1,0 +1,36 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% block title %}Обзор{% endblock %}
+
+{% block content %}
+{% include 'dashboard/_filters.html' %}
+
+{% if not kpi %}
+  <div class="rounded-2xl border border-gray-200 bg-white p-6 text-gray-500 dark:border-gray-800 dark:bg-white/3 dark:text-gray-400">
+    По этому городу ещё нет данных. Включите его в админке и дождитесь сбора
+    (или <code class="font-mono">docker compose exec scheduler python manage.py collect_lun</code>).
+  </div>
+{% else %}
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-4">
+    {% for tile in tiles %}
+      {% include 'dashboard/_kpi.html' with label=tile.label value=tile.value hint=tile.hint change=tile.change change_hint=tile.change_hint %}
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 md:mt-6 dark:border-gray-800 dark:bg-white/3">
+    <div class="mb-4">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Медиана цены м², {{ f.cur|upper }}{% if f.deal == 'rent' %} в месяц{% endif %}</h3>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Вся история с {{ kpi.first_date|date:"m.Y" }}: точки ЛУН на 24-е число каждого месяца.
+        Белый маркер — предварительная точка на дату выгрузки.
+      </p>
+    </div>
+    <div class="chart" data-endpoint="{{ chart_url }}" data-mode="city-m2" data-cur="{{ f.cur }}" data-height="330"></div>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script defer src="{% static 'dashboard/vendor/apexcharts.min.js' %}"></script>
+<script defer src="{% static 'dashboard/js/charts.js' %}"></script>
+{% endblock %}

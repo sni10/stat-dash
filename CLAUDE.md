@@ -5,7 +5,12 @@ charts in a TailAdmin-based UI. Spec: `ТЗ Дашборд рынка недви
 Stack and CI mirror `agregator-backend`.
 
 - Stage 1 (done): `collector` app — `collect_lun`, `scheduler` container (supercronic, `deploy/crontab`).
-- Stage 2: dashboard pages + JSON endpoints. Stage 3: table/CSV, collection status, anomaly alerts, more cities.
+- Stage 2 (done): `dashboard` app — Overview and By rooms pages, `/api/prices`, `/api/monthly`, Django login.
+- Stage 3: table/CSV, collection status page, anomaly and stale-run alerts, more cities.
+
+UI: TailAdmin free (Tailwind v4) theme in `frontend/src/tailadmin.css`. After changing templates or
+`dashboard/static/dashboard/js`, run `npm ci && npm run build` in `frontend/` and commit `dashboard/static`
+(CI fails on a stale build). LUN's m² median is per city: equal for every room count.
 
 Run locally: `docker compose up -d --build`; tests: `uv run python manage.py test` (needs the `db` service,
 127.0.0.1:5435). Real LUN data never goes into the repo: test payloads are synthetic (`collector/tests/factories.py`).

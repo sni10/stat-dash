@@ -1,0 +1,5 @@
+/* Dashboard stylesheet: the TailAdmin theme plus the utilities used by our templates and charts.js. */
+@import "./tailadmin.css";
+
+@source "../../dashboard/templates";
+@source "../../dashboard/static/dashboard/js";

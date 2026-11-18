@@ -87,9 +87,26 @@ jobs:
           path: reports/
           retention-days: 14
 
+  # The dashboard CSS and vendored JS are committed (no Node at runtime): they must match a fresh build
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Committed build is up to date
+        run: git diff --exit-code -- dashboard/static || { echo '::error::Run `npm run build` in frontend/ and commit dashboard/static'; exit 1; }
+
   release:
     if: github.event_name == 'push'
-    needs: [commits, test]
+    needs: [commits, test, assets]
     runs-on: ubuntu-latest
     permissions:
       contents: write  # tag + GitHub Release

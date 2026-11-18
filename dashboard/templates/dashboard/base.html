@@ -1,0 +1,55 @@
+{% load static %}<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · stat-dash</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 20h18M5 16l4-5 4 3 6-8' fill='none' stroke='%23465fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <script>
+    // before the first paint: no flash of the light theme
+    try {
+      const saved = JSON.parse(localStorage.getItem('darkMode'));  // null -> follow the system theme
+      if (saved ?? matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.classList.add('dark');
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="{% static 'dashboard/app.css' %}">
+  <script defer src="{% static 'dashboard/vendor/alpine.min.js' %}"></script>
+  {% block head %}{% endblock %}
+</head>
+<body
+  x-data="{ page: '{{ page }}', darkMode: document.documentElement.classList.contains('dark'), sidebarToggle: false }"
+  class="bg-gray-50 font-outfit text-gray-800 dark:bg-gray-900 dark:text-white/90"
+>
+<div class="flex h-screen overflow-hidden">
+  {% include 'dashboard/_sidebar.html' %}
+
+  <div class="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
+    <main id="main-content">
+      {% include 'dashboard/_header.html' with heading=heading_text %}
+
+      <div class="mx-auto max-w-(--breakpoint-2xl) p-4 pb-20 md:p-6 md:pb-6">
+        {% if collection.stale %}
+          <div role="alert" class="mb-6 rounded-xl border border-amber-500 bg-amber-50 p-4 text-sm text-gray-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-white/90">
+            <strong class="font-semibold">Сбор давно не выполнялся.</strong>
+            {% if collection.last_success %}
+              Последний успешный — {{ collection.last_success.started_at|date:"d.m.Y H:i" }}.
+            {% else %}
+              Успешных сборов ещё не было.
+            {% endif %}
+            Проверьте контейнер <code class="font-mono">scheduler</code>.
+          </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+
+        <p class="mt-8 text-xs text-gray-400 dark:text-gray-500">
+          Данные: <a class="underline hover:text-brand-500" href="https://lun.ua/stat" rel="noopener" target="_blank">ЛУН Статистика</a>.
+          Цены объявлений, не сделок. Только для личного использования.
+        </p>
+      </div>
+    </main>
+  </div>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

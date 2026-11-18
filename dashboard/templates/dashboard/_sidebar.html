@@ -1,0 +1,68 @@
+{# TailAdmin app-layout sidebar, trimmed to this app's pages #}
+<a class="sr-only" href="#main-content">К содержимому</a>
+<div x-cloak x-show="sidebarToggle" class="fixed inset-0 z-99 bg-gray-900/50 backdrop-blur-xs xl:hidden"
+     aria-hidden="true" @click="sidebarToggle = false" x-transition.opacity></div>
+
+<aside
+  x-cloak
+  :class="sidebarToggle ? 'translate-x-0 xl:w-22.5' : '-translate-x-full'"
+  class="sidebar fixed top-0 left-0 z-9999 flex h-screen w-72.5 flex-col border-r border-gray-200 bg-white px-5 transition-all duration-300 xl:static xl:translate-x-0 dark:border-gray-800 dark:bg-black"
+  @click.outside="if (window.innerWidth < 1280) sidebarToggle = false"
+  aria-label="Навигация"
+>
+  <div :class="sidebarToggle ? 'xl:justify-center' : 'justify-between'" class="flex items-center gap-2 pt-5 pb-8">
+    <a href="{% url 'overview' %}" class="flex items-center gap-3">
+      <span class="flex size-9 items-center justify-center rounded-xl bg-brand-500 text-white">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 20h18M5 16l4-5 4 3 6-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span :class="sidebarToggle ? 'xl:hidden' : ''" class="text-lg font-semibold text-gray-800 dark:text-white/90">stat-dash</span>
+    </a>
+  </div>
+
+  <div class="no-scrollbar flex flex-1 flex-col overflow-y-auto">
+    <nav aria-label="Страницы">
+      <h3 class="mb-4 text-xs leading-5 text-gray-400 uppercase">
+        <span :class="sidebarToggle ? 'xl:hidden' : ''">Рынок</span>
+      </h3>
+      <ul class="mb-6 flex flex-col gap-1">
+        <li>
+          <a href="{% url 'overview' %}?{{ nav_query }}" class="group menu-item {% if page == 'overview' %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+            <svg class="{% if page == 'overview' %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3.75" y="3.75" width="7" height="7" rx="1.75" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="13.25" y="3.75" width="7" height="7" rx="1.75" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="3.75" y="13.25" width="7" height="7" rx="1.75" stroke="currentColor" stroke-width="1.5"/>
+              <rect x="13.25" y="13.25" width="7" height="7" rx="1.75" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            <span :class="sidebarToggle ? 'xl:hidden' : ''">Обзор</span>
+          </a>
+        </li>
+        <li>
+          <a href="{% url 'rooms' %}?{{ nav_query }}" class="group menu-item {% if page == 'rooms' %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+            <svg class="{% if page == 'rooms' %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3.75 19.25h16.5M5.5 15.5l4-4.5 3.5 2.5 5.5-6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5.5 11.5l4-2 3.5 1 5.5-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
+            </svg>
+            <span :class="sidebarToggle ? 'xl:hidden' : ''">По комнатности</span>
+          </a>
+        </li>
+      </ul>
+
+      <h3 class="mb-4 text-xs leading-5 text-gray-400 uppercase">
+        <span :class="sidebarToggle ? 'xl:hidden' : ''">Сервис</span>
+      </h3>
+      <ul class="mb-6 flex flex-col gap-1">
+        <li>
+          <a href="{% url 'admin:index' %}" class="group menu-item menu-item-inactive">
+            <svg class="menu-item-icon-inactive" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M12 3.75v2M12 18.25v2M3.75 12h2M18.25 12h2M6.17 6.17l1.41 1.41M16.42 16.42l1.41 1.41M6.17 17.83l1.41-1.41M16.42 7.58l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span :class="sidebarToggle ? 'xl:hidden' : ''">Админка</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</aside>

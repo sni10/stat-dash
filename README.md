@@ -26,6 +26,10 @@ docker compose exec web python manage.py createsuperuser   # admin: http://local
 docker compose exec scheduler python manage.py collect_lun # collect now instead of waiting for Monday
 ```
 
+Dashboard: http://localhost:8010/ (log in with the superuser): Overview (m² median, month and year change, number of
+listings, the whole history) and By rooms (object price per room count, period filter). JSON:
+`/api/prices?city=odesa&deal=sale&rooms=1,2&from=YYYY-MM&to=YYYY-MM&cur=usd` and `/api/monthly` with the same params.
+
 Cities are seeded from lun.ua/stat (22, LUN `cityId`); only Odesa is enabled. Enable more in the admin.
 
 ## Develop
@@ -34,7 +38,10 @@ Cities are seeded from lun.ua/stat (22, LUN `cityId`); only Odesa is enabled. En
 docker compose up -d db
 uv sync
 uv run python manage.py test
+(cd frontend && npm ci && npm run build)   # after changing templates: rebuilds dashboard/static (committed)
 ```
+
+UI theme: [TailAdmin](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) free, MIT.
 
 Commits follow Conventional Commits: releases (`vX.Y.Z` tags, GitHub Releases, `ghcr.io` images) are made by CI
 from them.

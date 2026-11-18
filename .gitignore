@@ -15,3 +15,6 @@ backups/
 
 # local spec and notes
 ТЗ*.md
+
+# frontend build: only the output in dashboard/static is committed
+frontend/node_modules/

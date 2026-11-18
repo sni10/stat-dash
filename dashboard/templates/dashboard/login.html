@@ -1,0 +1,55 @@
+{% load static %}<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход · stat-dash</title>
+  <script>
+    try {
+      const saved = JSON.parse(localStorage.getItem('darkMode'));  // null -> follow the system theme
+      if (saved ?? matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.classList.add('dark');
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="{% static 'dashboard/app.css' %}">
+</head>
+{# TailAdmin sign-in page, without the decorative side panel #}
+<body class="bg-white font-outfit dark:bg-gray-900">
+<main class="flex min-h-screen items-center justify-center p-6">
+  <div class="w-full max-w-md">
+    <div class="mb-8 flex items-center gap-3">
+      <span class="flex size-10 items-center justify-center rounded-xl bg-brand-500 text-white">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 20h18M5 16l4-5 4 3 6-8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="text-xl font-semibold text-gray-800 dark:text-white/90">stat-dash</span>
+    </div>
+    <h1 class="mb-2 text-title-sm font-semibold text-gray-800 sm:text-title-lg dark:text-white/90">Вход</h1>
+    <p class="mb-7 text-sm text-gray-500 dark:text-gray-400">Цены на жильё по данным ЛУН Статистики.</p>
+
+    <form method="post" class="space-y-5">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      {% if form.non_field_errors %}
+        <p role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-500">
+          Неверное имя пользователя или пароль.
+        </p>
+      {% endif %}
+      <label class="block">
+        <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Пользователь</span>
+        <input type="text" name="username" autocomplete="username" required autofocus value="{{ form.username.value|default:'' }}"
+               class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+      </label>
+      <label class="block">
+        <span class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Пароль</span>
+        <input type="password" name="password" autocomplete="current-password" required
+               class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+      </label>
+      <button type="submit" class="flex h-11 w-full items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
+        Войти
+      </button>
+    </form>
+  </div>
+</main>
+</body>
+</html>

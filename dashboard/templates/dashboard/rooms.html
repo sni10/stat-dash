@@ -1,0 +1,30 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% block title %}По комнатности{% endblock %}
+
+{% block content %}
+{% include 'dashboard/_filters.html' %}
+
+<div class="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 dark:border-gray-800 dark:bg-white/3">
+  <div class="mb-4">
+    {% if metric == 'price' %}
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Медиана цены объекта, {{ f.cur|upper }}{% if f.deal == 'rent' %} в месяц{% endif %}</h3>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Линия на каждую комнатность; щелчок по легенде скрывает линию. Белый маркер — предварительная точка.
+      </p>
+    {% else %}
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Медиана цены м², {{ f.cur|upper }}{% if f.deal == 'rent' %} в месяц{% endif %}</h3>
+      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        ЛУН считает медиану м² по городу целиком: для всех комнатностей она одинакова, поэтому линия одна.
+      </p>
+    {% endif %}
+  </div>
+  <div class="chart" data-endpoint="{{ chart_url }}" data-mode="{% if metric == 'price' %}rooms-price{% else %}city-m2{% endif %}"
+       data-cur="{{ f.cur }}" data-height="380"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script defer src="{% static 'dashboard/vendor/apexcharts.min.js' %}"></script>
+<script defer src="{% static 'dashboard/js/charts.js' %}"></script>
+{% endblock %}
