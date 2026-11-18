@@ -26,6 +26,8 @@ class AppSettings(BaseSettings):
     telegram_bot_token: SecretStr = SecretStr('')
     telegram_chat_id: str = ''
 
+    dashboard_default_city: str = 'odesa'  # slug shown when the URL names no city
+
     backup_dir: str = ''  # `collect_lun --backup` writes pg_dump files here; empty -> backups off
     backup_keep: int = 8
 

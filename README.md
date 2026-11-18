@@ -30,7 +30,9 @@ Dashboard: http://localhost:8010/ (log in with the superuser): Overview (m² med
 listings, the whole history) and By rooms (object price per room count, period filter). JSON:
 `/api/prices?city=odesa&deal=sale&rooms=1,2&from=YYYY-MM&to=YYYY-MM&cur=usd` and `/api/monthly` with the same params.
 
-Cities are seeded from lun.ua/stat (22, LUN `cityId`); only Odesa is enabled. Enable more in the admin.
+Cities are seeded from lun.ua/stat (22, LUN `cityId`); all are collected (about 4–5 minutes
+per run with the pauses between requests) and listed in the dashboard's city filter; Odesa is the default
+(`DASHBOARD_DEFAULT_CITY`). Switch a city off in the admin.
 
 ## Develop
 

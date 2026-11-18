@@ -22,6 +22,7 @@ def no_sleep(_seconds):
 class CollectTests(TestCase):
     def setUp(self):
         self.odesa = City.objects.get(slug='odesa')
+        City.objects.exclude(pk=self.odesa.pk).update(enabled=False)  # the fake answers are Odesa's
         self.alerts = []
 
     def run_collect(self, client, cities=None):
@@ -179,7 +180,7 @@ class StalenessTests(TestCase):
 @override_settings(LUN=NO_PAUSE)
 class MonthlyViewTests(TestCase):
     def test_today_point_is_not_aggregated(self):
-        collect(client=FakeClient(answers()), sleep=no_sleep, alert=lambda _: None)
+        collect([City.objects.get(slug='odesa')], client=FakeClient(answers()), sleep=no_sleep, alert=lambda _: None)
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT month, w_avg_m2_usd FROM v_price_monthly "
@@ -191,7 +192,8 @@ class MonthlyViewTests(TestCase):
 
 
 class SeedTests(TestCase):
-    def test_cities_seeded_with_only_odesa_enabled(self):
+    def test_all_cities_seeded_and_enabled(self):
         self.assertEqual(City.objects.count(), 22)
-        self.assertEqual(list(City.objects.filter(enabled=True).values_list('id', flat=True)), [115])
+        self.assertEqual(City.objects.filter(enabled=True).count(), 22)
+        self.assertEqual(City.objects.get(slug='odesa').id, 115)
         self.assertEqual(City.objects.get(slug='kyiv').id, 1)

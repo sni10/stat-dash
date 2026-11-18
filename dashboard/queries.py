@@ -8,6 +8,7 @@ import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from django.conf import settings
 from django.contrib.postgres.aggregates import BoolOr
 from django.db import connection
 from django.db.models import Max, Sum
@@ -60,7 +61,8 @@ def _month(value: str, *, end: bool) -> dt.date:
 
 
 def default_city() -> City | None:
-    return City.objects.filter(enabled=True).order_by('id').first() or City.objects.order_by('id').first()
+    return (City.objects.filter(slug=settings.DASHBOARD_DEFAULT_CITY).first()
+            or City.objects.filter(enabled=True).order_by('id').first() or City.objects.order_by('id').first())
 
 
 def parse_filters(params: Mapping[str, str]) -> Filters:

@@ -23,7 +23,7 @@ def _context(filters, page, **extra):
         'f': filters,
         # the sidebar keeps city, deal and currency when switching pages
         'nav_query': urlencode({'city': filters.city.slug, 'deal': filters.deal, 'cur': filters.cur}),
-        'cities': (City.objects.filter(enabled=True) | City.objects.filter(pk=filters.city.pk)).distinct(),
+        'cities': City.objects.order_by('name'),  # all cities, collected or not; one without data says so
         'deals': [(k, DEAL_LABELS[k]) for k in DEALS],
         'currencies': [(c, CURRENCY_LABELS[c]) for c in CURRENCIES],
         **extra,

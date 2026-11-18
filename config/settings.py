@@ -93,6 +93,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'overview'
 LOGOUT_REDIRECT_URL = 'login'
+DASHBOARD_DEFAULT_CITY = ENV.dashboard_default_city
 
 LUN = {
     'BASE_URL': ENV.lun_base_url,

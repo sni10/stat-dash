@@ -19,7 +19,8 @@ NO_PAUSE = {'BASE_URL': 'http://lun.test/', 'PAUSE': (0, 0)}
 
 def load(data=None):
     with override_settings(LUN=NO_PAUSE):
-        collect(client=FakeClient(data or answers()), sleep=lambda _: None, alert=lambda _: None)
+        collect([City.objects.get(slug='odesa')], client=FakeClient(data or answers()), sleep=lambda _: None,
+                alert=lambda _: None)
 
 
 class LoggedInTestCase(TestCase):
@@ -154,9 +155,14 @@ class PageTests(LoggedInTestCase):
         CollectRun.objects.create(started_at=timezone.now() - dt.timedelta(days=9), status=CollectRun.Status.OK)
         self.assertContains(self.client.get(reverse('overview')), 'Сбор давно не выполнялся')
 
-    def test_disabled_city_by_url_stays_in_the_select(self):
-        response = self.client.get(reverse('overview'), {'city': 'kyiv'})
-        self.assertContains(response, '<option value="kyiv" selected>')
+    def test_all_cities_in_the_select_odesa_by_default(self):
+        response = self.client.get(reverse('overview'))
+        self.assertEqual(response.content.decode().count('<option value='), 22)
+        self.assertContains(response, '<option value="odesa" selected>')
+        City.objects.filter(slug='lviv').update(enabled=False)  # not collected any more: still selectable
+        response = self.client.get(reverse('overview'), {'city': 'lviv'})
+        self.assertContains(response, '<option value="lviv" selected>')
+        self.assertContains(response, 'ещё нет данных')
 
 
 class FormatTests(TestCase):
