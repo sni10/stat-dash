@@ -14,13 +14,11 @@ from pydantic import ValidationError
 from .alerts import send_alert
 from .lun.client import LunBlocked, LunClient, LunError
 from .lun.hashing import payload_hash
-from .lun.schemas import FlatPriceHistoryResponse, FlatPricePoint, PriceResponse
-from .models import City, CollectRun, ContractType, LunRaw
+from .lun.endpoints import ENDPOINTS, FLAT_PRICE_HISTORY
+from .lun.schemas import FlatPricePoint
+from .models import City, CollectRun, LunRaw
 
 logger = logging.getLogger(__name__)
-
-FLAT_PRICE_HISTORY = 'flat-price-history'
-PRICE = 'price'
 
 # A run still "running" after this long was killed (container stopped, computer off) and never finished
 INTERRUPTED_AFTER = dt.timedelta(hours=1)
@@ -35,20 +33,21 @@ class SchemaMismatch(Exception):
 @dataclass(frozen=True)
 class Job:
     endpoint: str
-    city: City
+    city: City | None  # None: a global endpoint, one answer for every region
     params: dict
 
     def __str__(self):
-        return f'{self.endpoint} {self.city.slug} {self.params}'
+        return f'{self.endpoint} {self.city.slug if self.city else "all"} {self.params}'
 
 
-def plan_jobs(cities: Iterable[City]) -> list[Job]:
-    jobs = []
-    for city in cities:
-        for contract_type in ContractType:
-            jobs.append(Job(FLAT_PRICE_HISTORY, city, {'cityId': city.id, 'contractTypeId': int(contract_type)}))
-        # `price` is archived raw and validated; normalized tables come in stage 2
-        jobs.append(Job(PRICE, city, {'cityId': city.id}))
+def plan_jobs(cities: Iterable[City], endpoints: Iterable[str] | None = None) -> list[Job]:
+    """Per-city endpoints for every city, then the global ones once."""
+    chosen = [ENDPOINTS[name] for name in (endpoints or ENDPOINTS)]
+    jobs = [
+        Job(e.name, city, params)
+        for city in cities for e in chosen if e.per_city for params in e.params(city.id)
+    ]
+    jobs += [Job(e.name, None, params) for e in chosen if not e.per_city for params in e.params(None)]
     return jobs
 
 
@@ -111,18 +110,19 @@ def upsert_price_history(city_id: int, contract_type: int, points: list[FlatPric
 
 
 def store_parsed(job: Job, payload: dict) -> int:
-    """Validate the payload and write the normalized rows. Raises ValidationError / SchemaMismatch."""
-    if job.endpoint == FLAT_PRICE_HISTORY:
-        response = FlatPriceHistoryResponse.model_validate(payload)
-        contract_type = job.params['contractTypeId']
-        foreign = [p for p in response.data if p.cityId != job.city.id or p.contractType != contract_type]
+    """Validate the payload (all endpoints) and write the normalized rows (flat-price-history only).
+    Raises ValidationError / SchemaMismatch."""
+    response = ENDPOINTS[job.endpoint].schema.model_validate(payload)
+    if job.city is not None and isinstance(response.data, list):
+        foreign = [p for p in response.data if getattr(p, 'cityId', job.city.id) != job.city.id]
         if foreign:
-            raise SchemaMismatch(f'{len(foreign)} points of another city or contract type')
-        return upsert_price_history(job.city.id, contract_type, response.data)
-    if job.endpoint == PRICE:
-        PriceResponse.model_validate(payload)
+            raise SchemaMismatch(f'{len(foreign)} records of another city')
+    if job.endpoint != FLAT_PRICE_HISTORY:
         return 0
-    raise ValueError(f'unknown endpoint {job.endpoint}')
+    contract_type = job.params['contractTypeId']
+    if any(p.contractType != contract_type for p in response.data):
+        raise SchemaMismatch('points of another contract type')
+    return upsert_price_history(job.city.id, contract_type, response.data)
 
 
 def last_success(statuses=(CollectRun.Status.OK, CollectRun.Status.PARTIAL)) -> CollectRun | None:
@@ -154,6 +154,7 @@ def unlock() -> None:
 def collect(
     cities: Iterable[City] | None = None,
     *,
+    endpoints: Iterable[str] | None = None,
     client: LunClient | None = None,
     sleep: Callable[[float], None] = time.sleep,
     alert: Callable[[str], None] = send_alert,
@@ -166,7 +167,7 @@ def collect(
     run = CollectRun.objects.create(started_at=timezone.now(), status=CollectRun.Status.RUNNING)
     errors: list[str] = []
     rows = done = 0
-    jobs = plan_jobs(cities)
+    jobs = plan_jobs(cities, endpoints)
     try:
         for i, job in enumerate(jobs):
             if i:

@@ -47,6 +47,16 @@
             <span :class="sidebarToggle ? 'xl:hidden' : ''">По комнатности</span>
           </a>
         </li>
+        {% for item in nav_pages %}
+          <li>
+            <a href="{% url item.name %}?{{ nav_query }}" class="group menu-item {% if page == item.name %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+              <svg class="{% if page == item.name %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="{{ item.icon }}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span :class="sidebarToggle ? 'xl:hidden' : ''">{{ item.title }}</span>
+            </a>
+          </li>
+        {% endfor %}
       </ul>
 
       <h3 class="mb-4 text-xs leading-5 text-gray-400 uppercase">

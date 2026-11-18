@@ -1,0 +1,27 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+{% include 'dashboard/_filters.html' %}
+
+<div class="grid grid-cols-12 gap-4 md:gap-6">
+  {% for spec in specs %}
+    <section class="col-span-12 {% if not spec.wide %}xl:col-span-6{% endif %} rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 dark:border-gray-800 dark:bg-white/3">
+      <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">{{ spec.title }}</h3>
+      {% if spec.subtitle %}<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ spec.subtitle }}</p>{% endif %}
+      {% if spec.empty %}
+        <p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">{{ spec.empty }}</p>
+      {% else %}
+        <div class="chart mt-4" data-spec="{{ forloop.counter0 }}"></div>
+      {% endif %}
+    </section>
+  {% endfor %}
+</div>
+{{ specs|json_script:"chart-specs" }}
+{% endblock %}
+
+{% block scripts %}
+<script defer src="{% static 'dashboard/vendor/apexcharts.min.js' %}"></script>
+<script defer src="{% static 'dashboard/js/charts.js' %}"></script>
+{% endblock %}

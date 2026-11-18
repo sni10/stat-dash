@@ -27,11 +27,15 @@ docker compose exec scheduler python manage.py collect_lun # collect now instead
 ```
 
 Dashboard: http://localhost:8010/ (log in with the superuser): Overview (m² median, month and year change, number of
-listings, the whole history) and By rooms (object price per room count, period filter). JSON:
+listings, the whole history), By rooms (object price per room count, period filter), and pages built from LUN's
+other endpoints: Districts, Market (days on market, price distribution, listing vs deal price), Affordability
+(price in years of salary, rent share of salary, by profession, price in years of rent), New buildings (prices by
+class, developers, parking, construction, installments, housing put into service) and Houses. 1–3 room flats only:
+4+ rooms are collected but not shown. JSON:
 `/api/prices?city=odesa&deal=sale&rooms=1,2&from=YYYY-MM&to=YYYY-MM&cur=usd` and `/api/monthly` with the same params.
 
-Cities are seeded from lun.ua/stat (22, LUN `cityId`); all are collected (about 4–5 minutes
-per run with the pauses between requests) and listed in the dashboard's city filter; Odesa is the default
+Cities are seeded from lun.ua/stat (22, LUN `cityId`); all are collected: 18 endpoints per city plus
+4 global ones (`collector/lun/endpoints.py`), about 400 requests and 20–25 minutes per run with the pauses and listed in the dashboard's city filter; Odesa is the default
 (`DASHBOARD_DEFAULT_CITY`). Switch a city off in the admin.
 
 ## Develop

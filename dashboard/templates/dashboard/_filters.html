@@ -1,4 +1,4 @@
-{# GET form; every change reloads the page with the new filters #}
+{# GET form; every change reloads the page with the new filters. Groups: views._group(name, label, options, value) #}
 <form method="get" class="mb-6 flex flex-wrap items-end gap-3" aria-label="Фильтры">
   <label class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
     Город
@@ -7,29 +7,19 @@
     </select>
   </label>
 
-  <div class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-    <span>Сделка</span>
-    <div class="flex h-11 items-center gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
-      {% for value, label in deals %}
-        <label class="cursor-pointer">
-          <input type="radio" name="deal" value="{{ value }}" class="peer sr-only" onchange="this.form.submit()" {% if f.deal == value %}checked{% endif %}>
-          <span class="flex h-10 items-center rounded-md px-3 text-sm font-medium text-gray-500 transition-colors peer-checked:bg-white peer-checked:text-gray-900 peer-checked:shadow-theme-xs peer-focus-visible:ring-3 peer-focus-visible:ring-brand-500/20 hover:text-gray-900 dark:text-gray-400 dark:peer-checked:bg-gray-800 dark:peer-checked:text-white dark:hover:text-white">{{ label }}</span>
-        </label>
-      {% endfor %}
+  {% for group in filter_groups %}
+    <div class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+      <span>{{ group.label }}</span>
+      <div class="flex h-11 items-center gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
+        {% for value, label in group.options %}
+          <label class="cursor-pointer">
+            <input type="radio" name="{{ group.name }}" value="{{ value }}" class="peer sr-only" onchange="this.form.submit()" {% if group.value == value %}checked{% endif %}>
+            <span class="flex h-10 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap text-gray-500 transition-colors peer-checked:bg-white peer-checked:text-gray-900 peer-checked:shadow-theme-xs peer-focus-visible:ring-3 peer-focus-visible:ring-brand-500/20 hover:text-gray-900 dark:text-gray-400 dark:peer-checked:bg-gray-800 dark:peer-checked:text-white dark:hover:text-white">{{ label }}</span>
+          </label>
+        {% endfor %}
+      </div>
     </div>
-  </div>
-
-  <div class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-    <span>Валюта</span>
-    <div class="flex h-11 items-center gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
-      {% for value, label in currencies %}
-        <label class="cursor-pointer">
-          <input type="radio" name="cur" value="{{ value }}" class="peer sr-only" onchange="this.form.submit()" {% if f.cur == value %}checked{% endif %}>
-          <span class="flex h-10 items-center rounded-md px-3 text-sm font-medium text-gray-500 transition-colors peer-checked:bg-white peer-checked:text-gray-900 peer-checked:shadow-theme-xs peer-focus-visible:ring-3 peer-focus-visible:ring-brand-500/20 hover:text-gray-900 dark:text-gray-400 dark:peer-checked:bg-gray-800 dark:peer-checked:text-white dark:hover:text-white">{{ label }}</span>
-        </label>
-      {% endfor %}
-    </div>
-  </div>
+  {% endfor %}
 
   {% if period %}
     <label class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
@@ -40,17 +30,6 @@
       По месяц
       <input type="month" name="to" value="{{ f.date_to|date:'Y-m' }}" onchange="this.form.submit()" class="h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:[color-scheme:dark]">
     </label>
-    <div class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-      <span>Показатель</span>
-      <div class="flex h-11 items-center gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
-        {% for value, label in metrics %}
-          <label class="cursor-pointer">
-            <input type="radio" name="metric" value="{{ value }}" class="peer sr-only" onchange="this.form.submit()" {% if metric == value %}checked{% endif %}>
-            <span class="flex h-10 items-center rounded-md px-3 text-sm font-medium text-gray-500 transition-colors peer-checked:bg-white peer-checked:text-gray-900 peer-checked:shadow-theme-xs peer-focus-visible:ring-3 peer-focus-visible:ring-brand-500/20 hover:text-gray-900 dark:text-gray-400 dark:peer-checked:bg-gray-800 dark:peer-checked:text-white dark:hover:text-white">{{ label }}</span>
-          </label>
-        {% endfor %}
-      </div>
-    </div>
     {% if f.date_from or f.date_to %}
       <a href="?city={{ f.city.slug }}&amp;deal={{ f.deal }}&amp;cur={{ f.cur }}&amp;metric={{ metric }}" class="flex h-11 items-center px-2 text-sm font-medium text-brand-500 hover:text-brand-600">Весь период</a>
     {% endif %}

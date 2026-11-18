@@ -17,7 +17,7 @@ from collector.models import City, CollectRun, ContractType, LunPriceSnapshot
 
 DEALS = {'sale': ContractType.SALE, 'rent': ContractType.RENT}
 CURRENCIES = ('usd', 'uah')
-ROOMS = (1, 2, 3, 4)
+ROOMS = (1, 2, 3)  # 4+ rooms are collected but not shown anywhere in the dashboard
 STALE_AFTER = dt.timedelta(days=8)  # spec: missed run = last successful collect_run older than 8 days
 
 
@@ -120,7 +120,7 @@ def price_points(f: Filters) -> list[dict]:
 def city_series(f: Filters) -> list[dict]:
     """Per date: the city's m² median (one value for all room counts) and the number of listings (all rooms)."""
     rows = (
-        _snapshots(f).values('snap_date')
+        _snapshots(f).filter(room_count__in=f.rooms).values('snap_date')
         .annotate(m2=Max(f'median_m2_{f.cur}'), count=Sum('cnt'), today=BoolOr('is_today'))
         .order_by('snap_date')
     )

@@ -6,6 +6,7 @@ from . import views
 urlpatterns = [
     path('', views.overview, name='overview'),
     path('rooms/', views.rooms, name='rooms'),
+    *[path(f'{page}/', views.lun_page, {'page': page}, name=page) for page in views.PAGES],
     path('api/prices', views.api_prices, name='api-prices'),
     path('api/monthly', views.api_monthly, name='api-monthly'),
     path('login/', auth_views.LoginView.as_view(template_name='dashboard/login.html',

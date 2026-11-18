@@ -9,7 +9,9 @@ from collector.lun.client import LunBlocked, LunError
 from collector.models import City, CollectRun, LunPriceSnapshot, LunRaw
 from collector.service import collect, is_stale
 
-from .factories import PRICE, RENT, SALE, ByCityClient, FakeClient, answers, flat_price_history
+from .factories import (
+    CORE, PRICE, RENT, SALE, AllByCityClient, ByCityClient, FakeClient, all_answers, answers, flat_price_history,
+)
 
 NO_PAUSE = {'BASE_URL': 'http://lun.test/', 'PAUSE': (0, 0)}
 
@@ -26,7 +28,8 @@ class CollectTests(TestCase):
         self.alerts = []
 
     def run_collect(self, client, cities=None):
-        return collect(cities, client=client, sleep=no_sleep, alert=self.alerts.append)
+        # the stage 1 behaviour on the two original endpoints; AllEndpointsTests covers the rest
+        return collect(cities, endpoints=CORE, client=client, sleep=no_sleep, alert=self.alerts.append)
 
     def snapshots(self, **filters):
         return LunPriceSnapshot.objects.filter(city=self.odesa, **filters)
@@ -180,7 +183,8 @@ class StalenessTests(TestCase):
 @override_settings(LUN=NO_PAUSE)
 class MonthlyViewTests(TestCase):
     def test_today_point_is_not_aggregated(self):
-        collect([City.objects.get(slug='odesa')], client=FakeClient(answers()), sleep=no_sleep, alert=lambda _: None)
+        collect([City.objects.get(slug='odesa')], endpoints=CORE, client=FakeClient(answers()), sleep=no_sleep,
+                alert=lambda _: None)
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT month, w_avg_m2_usd FROM v_price_monthly "
@@ -189,6 +193,56 @@ class MonthlyViewTests(TestCase):
             rows = cursor.fetchall()
         self.assertEqual(len(rows), 12)  # Jan..Dec 2025; the 2026-01-10 "today" point has no month of its own
         self.assertEqual(float(rows[-1][1]), 1011.0)
+
+
+@override_settings(LUN=NO_PAUSE)
+class AllEndpointsTests(TestCase):
+    def setUp(self):
+        self.odesa = City.objects.get(slug='odesa')
+
+    def run_collect(self, client, cities=None, alerts=None):
+        return collect(cities or [self.odesa], client=client, sleep=no_sleep,
+                       alert=(alerts if alerts is not None else []).append)
+
+    def test_every_endpoint_is_requested_validated_and_archived(self):
+        client = FakeClient(all_answers())
+        run = self.run_collect(client)
+
+        self.assertEqual(run.status, CollectRun.Status.OK, run.error)
+        # 18 requests for the city (two endpoints twice: sale and rent) + 4 global ones without cityId
+        self.assertEqual(len(client.calls), 22)
+        self.assertEqual(LunRaw.objects.count(), 22)
+        global_rows = LunRaw.objects.filter(city__isnull=True)
+        self.assertEqual(set(global_rows.values_list('endpoint', flat=True)), {'dssu', 'lending', 'sections', 'pets-rent'})
+        self.assertEqual(global_rows.get(endpoint='dssu').params, {})
+
+    def test_rerun_does_not_duplicate_global_raw_rows(self):
+        self.run_collect(FakeClient(all_answers()))
+        self.run_collect(FakeClient(all_answers()))
+        self.assertEqual(LunRaw.objects.count(), 22)
+
+    def test_global_endpoints_are_requested_once_for_many_cities(self):
+        client = AllByCityClient()
+        run = self.run_collect(client, cities=[self.odesa, City.objects.get(slug='kyiv')])
+        self.assertEqual(run.status, CollectRun.Status.OK, run.error)
+        self.assertEqual(len(client.calls), 18 * 2 + 4)
+
+    def test_changed_format_of_a_new_endpoint_is_alerted_and_raw_kept(self):
+        data = all_answers()
+        data[('median-exposure', None)] = {'status': 'success', 'data': [{'cityId': 115, 'exposure': 'fast'}]}
+        alerts = []
+        run = self.run_collect(FakeClient(data), alerts=alerts)
+        self.assertEqual(run.status, CollectRun.Status.PARTIAL)
+        self.assertIn('median-exposure', run.error)
+        self.assertEqual(len(alerts), 1)
+        self.assertTrue(LunRaw.objects.filter(endpoint='median-exposure').exists())
+
+    def test_records_of_another_city_are_rejected(self):
+        data = all_answers()
+        data[('rieltor', None)] = all_answers(1)[('rieltor', None)]
+        run = self.run_collect(FakeClient(data))
+        self.assertEqual(run.status, CollectRun.Status.PARTIAL)
+        self.assertIn('another city', run.error)
 
 
 class SeedTests(TestCase):

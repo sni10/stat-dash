@@ -31,7 +31,7 @@ class LunRaw(models.Model):
 
     fetched_at = models.DateTimeField(default=timezone.now)
     endpoint = models.TextField()
-    city = models.ForeignKey(City, on_delete=models.PROTECT)
+    city = models.ForeignKey(City, on_delete=models.PROTECT, null=True, blank=True)  # None: global endpoint
     params = models.JSONField()
     payload_hash = models.CharField(max_length=64)
     payload = models.JSONField()

@@ -5,7 +5,7 @@
 
   const COLORS = ['#465FFF', '#12B76A', '#F79009', '#7A5AF8'];
   const SYMBOLS = { usd: '$', uah: '₴' };
-  const ROOM_LABELS = { 1: '1 комн.', 2: '2 комн.', 3: '3 комн.', 4: '4 комн.' };
+  const ROOM_LABELS = { 1: '1 комн.', 2: '2 комн.', 3: '3 комн.' };  // 4+ rooms are not shown
 
   const isDark = () => document.documentElement.classList.contains('dark');
   const number = (value, digits) =>
@@ -101,4 +101,65 @@
   }
 
   document.querySelectorAll('.chart[data-endpoint]').forEach(load);
+
+  // --- Specs embedded in the page (dashboard/charts.py): line | area | bar | hbar | donut ---------------------
+
+  const PALETTE = ['#465FFF', '#12B76A', '#F79009', '#7A5AF8', '#EE46BC', '#0BA5EC', '#F04438', '#667085',
+    '#9CB9FF', '#6CE9A6', '#FEC84B', '#BDB4FE'];
+
+  function specOptions(el, spec) {
+    const value = (v) => (v == null ? '—' : `${number(v, spec.digits)} ${spec.unit}`.trim());
+    const base = {
+      chart: { height: spec.height || 320, fontFamily: FONT, toolbar: { show: false }, zoom: { enabled: false },
+        animations: { enabled: false } },
+      colors: PALETTE,
+      dataLabels: { enabled: false },
+      legend: { show: spec.series.length > 1 || spec.type === 'donut', position: 'top', horizontalAlign: 'left',
+        fontFamily: FONT, labels: { colors: axisText() } },
+      grid: { borderColor: isDark() ? '#1E2640' : '#F3F4F6' },
+      tooltip: { theme: isDark() ? 'dark' : 'light', y: { formatter: value } },
+    };
+    if (spec.type === 'donut') {
+      return { ...base, chart: { ...base.chart, type: 'donut' }, series: spec.values, labels: spec.labels,
+        stroke: { colors: [isDark() ? '#101828' : '#ffffff'] },
+        dataLabels: { enabled: true, formatter: (v) => `${number(v, 0)}%` },
+        plotOptions: { pie: { donut: { size: '62%' } } } };
+    }
+    if (spec.type === 'bar' || spec.type === 'hbar') {
+      const horizontal = spec.type === 'hbar';
+      const axis = { labels: { style: { colors: axisText() } } };
+      return { ...base, chart: { ...base.chart, type: 'bar' },
+        series: spec.series, xaxis: { categories: spec.categories, axisBorder: { show: false }, axisTicks: { show: false },
+          labels: { ...axis.labels, ...(horizontal ? { formatter: (v) => number(Number(v), 0) } : { rotate: -45, trim: true }) } },
+        yaxis: { labels: { ...axis.labels, maxWidth: 220, ...(horizontal ? {} : { formatter: (v) => number(v, spec.digits) }) } },
+        plotOptions: { bar: { horizontal, borderRadius: 4, columnWidth: '60%', barHeight: '70%' } },
+        tooltip: { ...base.tooltip, shared: true, intersect: false },
+        grid: { ...base.grid, xaxis: { lines: { show: horizontal } }, yaxis: { lines: { show: !horizontal } } } };
+    }
+    const preliminary = new Set(spec.preliminary.map((d) => Date.parse(d)));
+    const series = spec.series.map((s) => ({ name: s.name, data: s.data.map((p) => ({ x: Date.parse(p.x), y: p.y })) }));
+    const discrete = [];
+    series.forEach((s, si) => s.data.forEach((p, pi) => {
+      if (preliminary.has(p.x)) discrete.push({ seriesIndex: si, dataPointIndex: pi, fillColor: '#fff', strokeColor: PALETTE[si % PALETTE.length], size: 6 });
+    }));
+    return { ...base, chart: { ...base.chart, type: spec.type === 'area' ? 'area' : 'line' }, series,
+      stroke: { curve: 'straight', width: 2 }, markers: { size: 0, hover: { size: 5 }, discrete },
+      xaxis: { type: 'datetime', axisBorder: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false },
+        labels: { datetimeUTC: false, format: 'MM.yyyy', style: { colors: axisText() } } },
+      yaxis: { labels: { formatter: (v) => number(v, spec.digits), style: { colors: axisText() } } },
+      grid: { ...base.grid, xaxis: { lines: { show: false } }, yaxis: { lines: { show: true } } },
+      tooltip: { ...base.tooltip, shared: true, intersect: false,
+        x: { formatter: (ms) => date(ms) + (preliminary.has(ms) ? ' · предварительно' : '') } } };
+  }
+
+  const specsNode = document.getElementById('chart-specs');
+  if (specsNode) {
+    const specs = JSON.parse(specsNode.textContent);
+    document.querySelectorAll('.chart[data-spec]').forEach((el) => {
+      const spec = specs[Number(el.dataset.spec)];
+      const chart = new ApexCharts(el, specOptions(el, spec));
+      chart.render();
+      window.addEventListener('theme-changed', () => chart.updateOptions(specOptions(el, spec), false, false));
+    });
+  }
 })();

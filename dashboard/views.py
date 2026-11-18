@@ -6,28 +6,69 @@ from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 
-from collector.models import City
+from collector.models import City, LunRaw
 
-from . import queries
+from . import charts, queries
 from .queries import CURRENCIES, DEALS, BadFilter
 from .templatetags.dash import money, num, pct
 
 DEAL_LABELS = {'sale': 'Продажа', 'rent': 'Аренда'}
 CURRENCY_LABELS = {'usd': 'USD', 'uah': 'UAH'}
 METRICS = [('price', 'Цена объекта'), ('m2', 'Цена м²')]
+REPAIRS = [('all', 'Все'), ('renovated', 'С ремонтом'), ('not', 'Без ремонта')]
+STAGE1_ENDPOINTS = ('flat-price-history', 'price')  # collected since stage 1; the pages below need the others
+NOT_COLLECTED = ('Эти данные по городу ещё не собраны. Они появятся после ближайшего сбора '
+                 '(понедельник 04:17) или после ручного запуска collect_lun.')
+
+# Pages built from LUN's other endpoints (dashboard/charts.py): filters shown and cards, in order
+PAGES = {
+    'districts': {
+        'title': 'Районы', 'filters': ('deal', 'cur', 'room', 'repair', 'metric'), 'rooms': (1, 2, 3),
+        'cards': (charts.flat_districts, charts.primary_districts, charts.parking_districts),
+    },
+    'market': {
+        'title': 'Рынок', 'filters': ('deal', 'cur', 'room'), 'rooms': (1, 2, 3),
+        'cards': (charts.exposure, charts.price_distribution, charts.listing_vs_deal),
+    },
+    'affordability': {
+        'title': 'Доступность', 'filters': ('deal',),
+        'cards': (charts.salary_history, charts.salary_positions, charts.sale_in_rent, charts.pets_rent),
+    },
+    'primary': {
+        'title': 'Новостройки', 'filters': ('cur',),
+        'cards': (charts.primary_classes, charts.developers_ranking, charts.developers_share, charts.parking_classes,
+                  charts.construction, charts.lending, charts.commissioning),
+    },
+    'houses': {
+        'title': 'Дома', 'filters': ('deal', 'cur'),
+        'cards': (charts.houses_price, charts.houses_m2, charts.houses_districts),
+    },
+}
 
 
-def _context(filters, page, **extra):
+def _group(name, label, options, value):
+    return {'name': name, 'label': label, 'options': options, 'value': value}
+
+
+def _context(filters, page, groups, **extra):
     return {
         'page': page,
         'f': filters,
         # the sidebar keeps city, deal and currency when switching pages
         'nav_query': urlencode({'city': filters.city.slug, 'deal': filters.deal, 'cur': filters.cur}),
         'cities': City.objects.order_by('name'),  # all cities, collected or not; one without data says so
-        'deals': [(k, DEAL_LABELS[k]) for k in DEALS],
-        'currencies': [(c, CURRENCY_LABELS[c]) for c in CURRENCIES],
+        'filter_groups': groups,
         **extra,
     }
+
+
+def _deal_cur(filters, which=('deal', 'cur')):
+    groups = []
+    if 'deal' in which:
+        groups.append(_group('deal', 'Сделка', [(k, DEAL_LABELS[k]) for k in DEALS], filters.deal))
+    if 'cur' in which:
+        groups.append(_group('cur', 'Валюта', [(c, CURRENCY_LABELS[c]) for c in CURRENCIES], filters.cur))
+    return groups
 
 
 def _filters_or_400(request):
@@ -35,6 +76,13 @@ def _filters_or_400(request):
         return queries.parse_filters(request.GET), None
     except BadFilter as exc:
         return None, HttpResponseBadRequest(str(exc))
+
+
+def _choice(request, name, options, default):
+    value = request.GET.get(name) or default
+    if value not in options:
+        raise BadFilter(f'{name} must be one of {", ".join(map(str, options))}')
+    return value
 
 
 def _prices_url(filters, **overrides) -> str:
@@ -49,7 +97,7 @@ def _tiles(kpi: dict, cur: str) -> list[dict]:
          'hint': f'к {kpi["month_ago"]:%d.%m.%Y}' if kpi['month_ago'] else 'нет точки месяц назад', 'change': None},
         {'label': 'Изменение за год', 'value': pct(kpi['m2_yoy']),
          'hint': f'к {kpi["year_ago"]:%d.%m.%Y}' if kpi['year_ago'] else 'нет точки год назад', 'change': None},
-        {'label': 'Объявлений', 'value': num(kpi['count']), 'hint': 'все комнатности',
+        {'label': 'Объявлений', 'value': num(kpi['count']), 'hint': '1–3 комн.',
          'change': kpi['count_mom'], 'change_hint': 'к прошлому месяцу'},
     ]
 
@@ -61,7 +109,8 @@ def overview(request):
         return error
     kpi = queries.overview(filters)
     return render(request, 'dashboard/overview.html', _context(
-        filters, 'overview', heading_text=f'Обзор · {filters.city.name}', kpi=kpi, tiles=_tiles(kpi, filters.cur) if kpi else [],
+        filters, 'overview', _deal_cur(filters), heading_text=f'Обзор · {filters.city.name}', kpi=kpi,
+        tiles=_tiles(kpi, filters.cur) if kpi else [],
         # m² is the same for every room count: one room's series is the city's
         chart_url=_prices_url(filters, rooms='1', **{'from': '', 'to': ''}),
     ))
@@ -75,9 +124,44 @@ def rooms(request):
     metric = request.GET.get('metric') or 'price'
     if metric not in dict(METRICS):
         return HttpResponseBadRequest('metric must be price or m2')
+    groups = _deal_cur(filters) + [_group('metric', 'Показатель', METRICS, metric)]
     return render(request, 'dashboard/rooms.html', _context(
-        filters, 'rooms', heading_text=f'По комнатности · {filters.city.name}', metric=metric, metrics=METRICS, period=True,
+        filters, 'rooms', groups, heading_text=f'По комнатности · {filters.city.name}', metric=metric, period=True,
         chart_url=_prices_url(filters, **({'rooms': '1'} if metric == 'm2' else {})),
+    ))
+
+
+@login_required
+def lun_page(request, page):
+    """Districts, Market, Affordability, New buildings, Houses: cards drawn from LUN's latest answers."""
+    conf = PAGES[page]
+    try:
+        filters = queries.parse_filters(request.GET)
+        room_options = conf.get('rooms', (1,))
+        room = int(_choice(request, 'room', [str(r) for r in room_options], str(room_options[0])))
+        repair = _choice(request, 'repair', dict(REPAIRS), 'all')
+        metric = _choice(request, 'metric', dict(METRICS), 'price')
+    except BadFilter as exc:
+        return HttpResponseBadRequest(str(exc))
+    ctx = charts.Ctx(filters.city, filters.deal, filters.cur, room, repair, metric)
+    groups = _deal_cur(filters, conf['filters'])
+    if 'room' in conf['filters']:
+        groups.append(_group('room', 'Комнат', [(str(r), charts.ROOM[r].replace(' комн.', '')) for r in room_options],
+                             str(room)))
+    if 'repair' in conf['filters']:
+        groups.append(_group('repair', 'Ремонт', REPAIRS, repair))
+    if 'metric' in conf['filters']:
+        groups.append(_group('metric', 'Показатель', METRICS, metric))
+    specs = [build(ctx) for build in conf['cards']]
+    # "LUN does not publish it" only when LUN was asked: before the first collection of these endpoints say so
+    collected = LunRaw.objects.filter(city=filters.city).exclude(endpoint__in=STAGE1_ENDPOINTS).exists()
+    for spec in specs:
+        spec['wide'] = spec['type'] in ('line', 'area') or len(spec['categories']) > 8
+        if spec['empty'] and not collected:
+            spec['empty'] = NOT_COLLECTED
+    return render(request, 'dashboard/cards.html', _context(
+        filters, page, groups, heading_text=f'{conf["title"]} · {filters.city.name}', title=conf['title'],
+        specs=specs,
     ))
 
 
