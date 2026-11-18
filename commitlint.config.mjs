@@ -3,6 +3,8 @@ export default {
   extends: ['@commitlint/config-conventional'],
   rules: {
     'header-max-length': [2, 'always', 150],
+    // a subject may start with a proper noun or an acronym (Ukrainian, README, LUN)
+    'subject-case': [0],
     'body-max-line-length': [0],
     'footer-max-line-length': [0],
   },
