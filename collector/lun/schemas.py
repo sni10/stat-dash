@@ -73,20 +73,26 @@ class MedianExposure(_Model):
 
 
 class MarketDistrict(_Model):
-    """Latest medians by city district, in UAH (usdToUah converts). medianM2Total: per m² of total area."""
+    """Latest medians by city district, in UAH (usdToUah converts). medianM2Total: per m² of total area.
+
+    Two shapes: most cities send renovated / not renovated splits and usdToUah; some (Ivano-Frankivsk: ~150
+    micro-districts) send only median, medianM2 and their USD values. Hence the optional fields."""
     cityId: int
     districtId: int
     districtName: str | None
     contractTypeId: int
     roomCount: int
     median: Num
-    medianRenovated: Num
-    medianNotRenovated: Num
-    medianM2Total: Num
-    medianM2TotalRenovated: Num
-    medianM2TotalNotRenovated: Num
+    medianUsd: Num = None
+    medianM2: Num = None
+    medianM2Usd: Num = None
+    medianRenovated: Num = None
+    medianNotRenovated: Num = None
+    medianM2Total: Num = None
+    medianM2TotalRenovated: Num = None
+    medianM2TotalNotRenovated: Num = None
     count: int | None
-    usdToUah: float
+    usdToUah: Num = None
     date: dt.datetime
 
 
@@ -198,7 +204,7 @@ class AverageByDistrict(_Model):
     """districts (start price per m² of new buildings) and parking-districts (parking space price)."""
     cityId: int
     key: int
-    label: Label
+    label: Label | str  # usually {"uk", "en"}; plain text for some rows (Kyiv)
     averageUah: Num
     averageUsd: Num
     count: int | None

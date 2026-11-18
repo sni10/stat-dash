@@ -261,6 +261,28 @@ class ChartBuilderTests(TestCase):
         self.assertEqual(charts.houses_districts(self.ctx())['categories'][0], 'Пересипський')
         self.assertIsNotNone(charts.houses_districts(self.ctx(deal='rent'))['empty'])
 
+    def test_short_district_shape_and_top_20(self):
+        """Ivano-Frankivsk: ~150 micro-districts with USD fields and no usdToUah: USD used as is, top 20 shown."""
+        from collector.tests.factories import _ok
+        rows = [{'cityId': 115, 'districtId': i, 'districtName': f'Мікрорайон {i}', 'contractTypeId': 1,
+                 'roomCount': 1, 'median': 1000.0 * i * 40, 'medianUsd': 1000.0 * i, 'medianM2': 30.0 * i * 40,
+                 'medianM2Usd': 30.0 * i, 'count': 5, 'date': '2026-11-18T00:00:00.000Z'} for i in range(1, 31)]
+        rows.append({**rows[0], 'districtId': 99, 'median': None, 'medianUsd': None})  # no data: left out
+        load({('market-districts', None): _ok(rows)})
+        spec = charts.flat_districts(self.ctx())
+        self.assertEqual(len(spec['categories']), 20)
+        self.assertEqual((spec['categories'][0], spec['series'][0]['data'][0]), ('Мікрорайон 30', 30000.0))
+        self.assertIn('20 самых дорогих из 30', spec['subtitle'])
+        self.assertEqual(charts.flat_districts(self.ctx(metric='m2'))['series'][0]['data'][0], 900.0)
+        self.assertEqual(charts.flat_districts(self.ctx(cur='uah'))['series'][0]['data'][0], 1200000.0)
+
+    def test_string_district_label(self):
+        from collector.tests.factories import average_by_district
+        districts = average_by_district()
+        districts['data'][0]['label'] = 'Київ'
+        load({('districts', None): districts})
+        self.assertIn('Київ', charts.primary_districts(self.ctx())['categories'])
+
     def test_city_without_data_says_so(self):
         lviv = charts.Ctx(City.objects.get(slug='lviv'))
         for build in (charts.flat_districts, charts.exposure, charts.salary_history, charts.primary_classes,

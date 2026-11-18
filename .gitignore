@@ -13,8 +13,9 @@ backups/
 
 .claude/settings.local.json
 
-# local spec and notes
+# local spec and notes; DEPLOY.md has the server's addresses (the public part is in README)
 ТЗ*.md
+DEPLOY.md
 
 # frontend build: only the output in dashboard/static is committed
 frontend/node_modules/

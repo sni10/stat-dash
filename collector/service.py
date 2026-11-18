@@ -12,7 +12,7 @@ from django.utils import timezone
 from pydantic import ValidationError
 
 from .alerts import send_alert
-from .lun.client import LunBlocked, LunClient, LunError
+from .lun.client import LunBlocked, LunClient, LunError, LunNotFound
 from .lun.hashing import payload_hash
 from .lun.endpoints import ENDPOINTS, FLAT_PRICE_HISTORY
 from .lun.schemas import FlatPricePoint
@@ -20,8 +20,9 @@ from .models import City, CollectRun, LunRaw
 
 logger = logging.getLogger(__name__)
 
-# A run still "running" after this long was killed (container stopped, computer off) and never finished
-INTERRUPTED_AFTER = dt.timedelta(hours=1)
+# A run still "running" after this long was killed (container stopped, computer off) and never finished.
+# A full run takes up to ~2 hours with the server's long pauses (.env.production.example).
+INTERRUPTED_AFTER = dt.timedelta(hours=6)
 # Two collections must not run at once: the weekly cron and the --if-stale catch-up can meet
 ADVISORY_LOCK_KEY = 0x5747A7  # any constant unique within this database
 
@@ -174,6 +175,10 @@ def collect(
                 sleep(random.uniform(*settings.LUN['PAUSE']))
             try:
                 payload = client.get(job.endpoint, job.params)
+            except LunNotFound:
+                logger.info('%s: not published by LUN (404)', job)
+                done += 1
+                continue
             except LunBlocked as exc:
                 errors.append(f'blocked: {exc}; {len(jobs) - i - 1} requests skipped')
                 break  # don't hammer a site that blocks us

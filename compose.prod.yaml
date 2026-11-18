@@ -1,0 +1,75 @@
+# Production stack of stat-dash (server: ~/stat-dash of the deploy user). Values come from .env next to this file
+# (see .env.production.example). IMAGE_TAG = commit SHA of the image built by CI, written by deploy/deploy.sh.
+#
+# No domain and no reverse proxy: the web port is published on one address of the server, WEB_BIND: its Tailscale IP
+# (reachable from the tailnet only) or 127.0.0.1 (SSH tunnel). Never 0.0.0.0 without HTTPS in front: the login
+# password would go in clear text, and Docker opens published ports past ufw.
+# Sized for a small VPS (1 CPU, ~1.6 GB RAM shared with other stacks): Postgres with small buffers, 2 gunicorn workers.
+x-logging: &logging
+  driver: local
+  options: { max-size: "20m", max-file: "5" }
+
+x-app: &app
+  image: ghcr.io/sni10/stat-dash:${IMAGE_TAG:?set IMAGE_TAG to a commit SHA}
+  env_file: .env
+  environment:
+    DB_HOST: db
+    DB_PORT: "5432"
+    TZ: Europe/Kyiv
+  depends_on:
+    db:
+      condition: service_healthy
+  logging: *logging
+
+services:
+  db:
+    image: postgres:17
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20", "-c", "work_mem=4MB"]
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  migrate:
+    <<: *app
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+
+  web:
+    <<: *app
+    # The server's one vCPU is shared with other projects: two workers are plenty for one user
+    command: ["gunicorn", "config.wsgi", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "60",
+              "--access-logfile", "-"]
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8010}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  scheduler:
+    <<: *app
+    command: ["sh", "./docker/scheduler.sh"]
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      TZ: Europe/Kyiv
+      BACKUP_DIR: /backups
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -38,6 +38,19 @@ Cities are seeded from lun.ua/stat (22, LUN `cityId`); all are collected: 18 end
 4 global ones (`collector/lun/endpoints.py`), about 400 requests and 20–25 minutes per run with the pauses and listed in the dashboard's city filter; Odesa is the default
 (`DASHBOARD_DEFAULT_CITY`). Switch a city off in the admin.
 
+## Deploy
+
+A small VPS is enough (1 CPU, ~1.6 GB RAM shared with other stacks): `compose.prod.yaml` runs the CI image
+`ghcr.io/sni10/stat-dash:<sha>` with db, migrate, web and scheduler; `.env.production.example` is the server's `.env`.
+No domain and no reverse proxy: the web port is published on the server's Tailscale IP (or 127.0.0.1 + SSH tunnel),
+never on a public address without HTTPS. The weekly collection runs with 10–20 s pauses there (~1.5–2 hours).
+
+```sh
+DEPLOY_SERVER=deploy@<server> bash deploy/deploy.sh <full commit sha>   # deploy or roll back
+```
+
+The server-specific steps live in a local, untracked `DEPLOY.md`.
+
 ## Develop
 
 ```sh

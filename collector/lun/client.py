@@ -17,6 +17,10 @@ class LunError(Exception):
     """The request failed after all attempts, or the answer is not usable JSON."""
 
 
+class LunNotFound(LunError):
+    """404: LUN does not publish this endpoint for the city (developers-ranking of small cities). Not an error."""
+
+
 class LunBlocked(LunError):
     """403 or an HTML page instead of JSON (Cloudflare challenge): stop, don't retry."""
 
@@ -54,6 +58,8 @@ class LunClient:
                     raise LunBlocked(f'{endpoint} {params}: HTTP 403')
                 if response.status_code == 429 or response.status_code >= 500:
                     error = LunError(f'{endpoint} {params}: HTTP {response.status_code}')
+                elif response.status_code == 404:
+                    raise LunNotFound(f'{endpoint} {params}: HTTP 404')
                 elif response.status_code != 200:
                     raise LunError(f'{endpoint} {params}: HTTP {response.status_code}')
                 elif 'json' not in response.headers.get('content-type', ''):

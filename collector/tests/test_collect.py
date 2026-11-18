@@ -143,7 +143,7 @@ class CollectTests(TestCase):
 
     def test_interrupted_runs_are_marked_failed(self):
         old = CollectRun.objects.create(
-            started_at=timezone.now() - dt.timedelta(hours=3), status=CollectRun.Status.RUNNING
+            started_at=timezone.now() - dt.timedelta(hours=7), status=CollectRun.Status.RUNNING
         )
         self.run_collect(FakeClient(answers()))
         old.refresh_from_db()
@@ -243,6 +243,31 @@ class AllEndpointsTests(TestCase):
         run = self.run_collect(FakeClient(data))
         self.assertEqual(run.status, CollectRun.Status.PARTIAL)
         self.assertIn('another city', run.error)
+
+    def test_404_means_not_published_not_an_error(self):
+        from collector.lun.client import LunNotFound
+        data = all_answers()
+        data[('developers-ranking', None)] = LunNotFound('developers-ranking: HTTP 404')
+        alerts = []
+        run = self.run_collect(FakeClient(data), alerts=alerts)
+        self.assertEqual(run.status, CollectRun.Status.OK, run.error)
+        self.assertEqual(alerts, [])
+        self.assertFalse(LunRaw.objects.filter(endpoint='developers-ranking').exists())
+
+    def test_other_shapes_seen_in_real_answers_are_accepted(self):
+        from .factories import _ok, average_by_district
+        data = all_answers()
+        # Ivano-Frankivsk: micro-districts with USD fields, no renovated splits and no usdToUah
+        data[('market-districts', None)] = _ok([{
+            'cityId': 115, 'districtId': 10027077, 'districtName': 'Будівельників', 'contractTypeId': 2,
+            'roomCount': 1, 'median': None, 'medianUsd': None, 'medianM2': None, 'medianM2Usd': None, 'count': 1,
+            'date': '2026-11-18T00:00:00.000Z', 'districtNameEng': 'Budivelnykiv'}])
+        # Kyiv: some district labels are plain strings
+        districts = average_by_district()
+        districts['data'][0]['label'] = 'Київ'
+        data[('districts', None)] = districts
+        run = self.run_collect(FakeClient(data))
+        self.assertEqual(run.status, CollectRun.Status.OK, run.error)
 
 
 class SeedTests(TestCase):

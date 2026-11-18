@@ -19,6 +19,7 @@ SYMBOL = {'usd': '$', 'uah': '₴'}
 ROOM = {None: 'Все', 1: '1 комн.', 2: '2 комн.', 3: '3 комн.'}  # 4+ rooms are not shown
 DEAL_IDS = {'sale': 1, 'rent': 2}
 NO_DATA = 'ЛУН не публикует эти данные для выбранного города.'
+MAX_DISTRICTS = 20  # some cities have ~150 micro-districts
 
 
 @dataclass(frozen=True)
@@ -88,26 +89,42 @@ def flat_districts(ctx: Ctx):
     data = latest('market-districts', ctx.city) or []
     rows = [r for r in data if r.contractTypeId == ctx.ct and r.roomCount == ctx.room]
     suffix = {'all': '', 'renovated': 'Renovated', 'not': 'NotRenovated'}[ctx.repair]
-    field = ('median' if ctx.metric == 'price' else 'medianM2Total') + suffix
-    rows.sort(key=lambda r: -(getattr(r, field) or 0))
-    values = [None if getattr(r, field) is None else getattr(r, field) / (r.usdToUah if ctx.cur == 'usd' else 1)
-              for r in rows]
+
+    def value(r):
+        """UAH field, converted with usdToUah; the short shape (no splits, no rate) has USD fields of its own."""
+        if ctx.metric == 'price':
+            uah, usd = getattr(r, 'median' + suffix), r.medianUsd if not suffix else None
+        else:
+            uah = getattr(r, 'medianM2Total' + suffix) if suffix or r.medianM2Total is not None else r.medianM2
+            usd = r.medianM2Usd if not suffix and r.medianM2Total is None else None
+        if ctx.cur == 'uah':
+            return uah
+        if uah is not None and r.usdToUah:
+            return uah / r.usdToUah
+        return usd
+
+    rows = [r for r in rows if value(r) is not None]
+    rows.sort(key=lambda r: -value(r))
+    shown = rows[:MAX_DISTRICTS]
+    values = [value(r) for r in shown]
     what = 'цена квартиры' if ctx.metric == 'price' else 'цена м²'
     repair = {'all': '', 'renovated': ', с ремонтом', 'not': ', без ремонта'}[ctx.repair]
     when = f' на {rows[0].date:%d.%m.%Y}' if rows else ''
+    top = f' {MAX_DISTRICTS} самых дорогих из {len(rows)}.' if len(rows) > MAX_DISTRICTS else ''
     return _spec(
         f'{"Аренда" if ctx.deal == "rent" else "Вторичка"}: медианная {what}, {ROOM[ctx.room]}{repair}',
-        f'По районам{when}. {ctx.cur.upper()}{ctx.per_month}.',
-        type='hbar', unit=ctx.symbol, categories=[r.districtName or str(r.districtId) for r in rows],
-        series=[{'name': 'Медиана', 'data': values}], height=60 + 44 * max(len(rows), 1),
+        f'По районам{when}. {ctx.cur.upper()}{ctx.per_month}.{top}',
+        type='hbar', unit=ctx.symbol, categories=[r.districtName or str(r.districtId) for r in shown],
+        series=[{'name': 'Медиана', 'data': values}], height=60 + 36 * max(len(shown), 1),
     )
 
 
 def _average_by_district(endpoint, ctx, title, subtitle):
     data = latest(endpoint, ctx.city) or []
-    rows = sorted(data, key=lambda r: -(r.averageUsd or 0))
+    rows = sorted(data, key=lambda r: -(r.averageUsd or 0))[:MAX_DISTRICTS]
     when = f' на {rows[0].month:%d.%m.%Y}' if rows else ''
-    return _spec(title, subtitle + when + '.', type='hbar', unit=ctx.symbol, categories=[r.label.uk for r in rows],
+    names = [r.label if isinstance(r.label, str) else r.label.uk for r in rows]
+    return _spec(title, subtitle + when + '.', type='hbar', unit=ctx.symbol, categories=names,
                  series=[{'name': 'Медиана', 'data': [_usd_uah(ctx, r.averageUsd, r.averageUah) for r in rows]}],
                  height=60 + 44 * max(len(rows), 1))
 
