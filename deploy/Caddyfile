@@ -1,0 +1,17 @@
+# Public HTTPS entry of the production stack (compose.prod.yaml, service caddy). SITE_HOST comes from the server's .env:
+# with no domain of our own, an sslip.io name that resolves to the server's IP (185-25-117-74.sslip.io style).
+# Caddy gets and renews the certificate itself (Let's Encrypt, ZeroSSL as the fallback).
+{$SITE_HOST} {
+	encode zstd gzip
+
+	# a personal dashboard: keep it out of search engines
+	header X-Robots-Tag "noindex, nofollow"
+	respond /robots.txt "User-agent: *
+Disallow: /
+" 200
+
+	# the admin stays private: only on the direct web port inside the tailnet
+	respond /admin* 404
+
+	reverse_proxy web:8000
+}

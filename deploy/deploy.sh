@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy (or roll back to) an image built by GitHub Actions:
 #   DEPLOY_SERVER=deploy@<server> deploy/deploy.sh <full commit sha>
-# Copies compose.prod.yaml to the server, records the sha in the server's .env (IMAGE_TAG), pulls and restarts the
+# Copies compose.prod.yaml and the Caddyfile to the server, records the sha in the server's .env (IMAGE_TAG), pulls and restarts the
 # stack. Migrations run in the one-shot `migrate` service before web and scheduler start.
 # The server address is not in this public repo: pass DEPLOY_SERVER (or export it in your shell profile).
 set -euo pipefail
@@ -18,6 +18,7 @@ fi
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ssh "$SERVER" mkdir -p "$DIR/backups"
 scp -q "$ROOT/compose.prod.yaml" "$SERVER:$DIR/compose.prod.yaml"
+scp -q "$ROOT/deploy/Caddyfile" "$SERVER:$DIR/Caddyfile"
 
 ssh "$SERVER" bash -s -- "$DIR" "$SHA" <<'REMOTE'
 set -euo pipefail

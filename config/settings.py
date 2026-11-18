@@ -12,6 +12,10 @@ SECRET_KEY = ENV.django_secret_key.get_secret_value()
 DEBUG = ENV.django_debug
 ALLOWED_HOSTS = [h.strip() for h in ENV.django_allowed_hosts.split(',') if h.strip()]
 
+# Production: caddy terminates HTTPS and sets X-Forwarded-Proto. Without this Django sees plain HTTP behind it, and the
+# login form's CSRF check rejects the https:// Origin. Direct access to the web port (tailnet) sends no such header.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # CI sets TEST_REPORTS_DIR: tests also write a JUnit report there (unittest-xml-reporting, a dev dependency)
 if os.environ.get('TEST_REPORTS_DIR'):
     TEST_RUNNER = 'xmlrunner.extra.djangotestrunner.XMLTestRunner'

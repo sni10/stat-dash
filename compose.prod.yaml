@@ -1,9 +1,10 @@
 # Production stack of stat-dash (server: ~/stat-dash of the deploy user). Values come from .env next to this file
 # (see .env.production.example). IMAGE_TAG = commit SHA of the image built by CI, written by deploy/deploy.sh.
 #
-# No domain and no reverse proxy: the web port is published on one address of the server, WEB_BIND: its Tailscale IP
-# (reachable from the tailnet only) or 127.0.0.1 (SSH tunnel). Never 0.0.0.0 without HTTPS in front: the login
-# password would go in clear text, and Docker opens published ports past ufw.
+# Public entry: caddy on 80/443 with HTTPS for SITE_HOST (an sslip.io name of the server's IP, no domain needed),
+# config deploy/Caddyfile. The web port itself is published only on WEB_BIND, a private address (the Tailscale IP or
+# 127.0.0.1): the admin is reachable there and not through caddy. Never publish the web port on 0.0.0.0: plain HTTP
+# would send the login password in clear text, and Docker opens published ports past ufw.
 # Sized for a small VPS (1 CPU, ~1.6 GB RAM shared with other stacks): Postgres with small buffers, 2 gunicorn workers.
 x-logging: &logging
   driver: local
@@ -56,6 +57,23 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2
+    environment:
+      SITE_HOST: ${SITE_HOST:?set SITE_HOST, e.g. 203-0-113-10.sslip.io}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data  # certificates: keep them, Let's Encrypt has rate limits
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+    logging: *logging
+
   scheduler:
     <<: *app
     command: ["sh", "./docker/scheduler.sh"]
@@ -73,3 +91,5 @@ services:
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

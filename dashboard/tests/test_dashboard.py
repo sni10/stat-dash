@@ -127,6 +127,19 @@ class PageTests(LoggedInTestCase):
         response = self.client.post(reverse('login'), {'username': 'me', 'password': 'pw'})
         self.assertRedirects(response, reverse('overview'))
 
+    @override_settings(ALLOWED_HOSTS=['demo.sslip.io'])
+    def test_login_behind_the_https_proxy_passes_csrf(self):
+        """caddy terminates HTTPS: with X-Forwarded-Proto the https:// Origin of the login form matches."""
+        from django.test import Client
+        browser = Client(enforce_csrf_checks=True)
+        proxy = {'HTTP_HOST': 'demo.sslip.io', 'HTTP_X_FORWARDED_PROTO': 'https'}
+        page = browser.get(reverse('login'), **proxy)
+        token = page.cookies['csrftoken'].value
+        response = browser.post(reverse('login'), {'username': 'me', 'password': 'pw', 'csrfmiddlewaretoken': token},
+                                HTTP_ORIGIN='https://demo.sslip.io', HTTP_REFERER='https://demo.sslip.io/login/', **proxy)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], reverse('overview'))
+
     def test_overview_shows_kpis_and_chart(self):
         load()
         response = self.client.get(reverse('overview'))
