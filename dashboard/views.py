@@ -12,35 +12,35 @@ from . import charts, queries
 from .queries import CURRENCIES, DEALS, BadFilter
 from .templatetags.dash import money, num, pct
 
-DEAL_LABELS = {'sale': 'Продажа', 'rent': 'Аренда'}
+DEAL_LABELS = {'sale': 'Продаж', 'rent': 'Оренда'}
 CURRENCY_LABELS = {'usd': 'USD', 'uah': 'UAH'}
-METRICS = [('price', 'Цена объекта'), ('m2', 'Цена м²')]
-REPAIRS = [('all', 'Все'), ('renovated', 'С ремонтом'), ('not', 'Без ремонта')]
+METRICS = [('price', 'Ціна об’єкта'), ('m2', 'Ціна м²')]
+REPAIRS = [('all', 'Усі'), ('renovated', 'З ремонтом'), ('not', 'Без ремонту')]
 STAGE1_ENDPOINTS = ('flat-price-history', 'price')  # collected since stage 1; the pages below need the others
-NOT_COLLECTED = ('Эти данные по городу ещё не собраны. Они появятся после ближайшего сбора '
-                 '(понедельник 04:17) или после ручного запуска collect_lun.')
+NOT_COLLECTED = ('Ці дані по місту ще не зібрані. Вони з’являться після найближчого збору '
+                 '(понеділок 04:17) або після ручного запуску collect_lun.')
 
 # Pages built from LUN's other endpoints (dashboard/charts.py): filters shown and cards, in order
 PAGES = {
     'districts': {
-        'title': 'Районы', 'filters': ('deal', 'cur', 'room', 'repair', 'metric'), 'rooms': (1, 2, 3),
+        'title': 'Райони', 'filters': ('deal', 'cur', 'room', 'repair', 'metric'), 'rooms': (1, 2, 3),
         'cards': (charts.flat_districts, charts.primary_districts, charts.parking_districts),
     },
     'market': {
-        'title': 'Рынок', 'filters': ('deal', 'cur', 'room'), 'rooms': (1, 2, 3),
+        'title': 'Ринок', 'filters': ('deal', 'cur', 'room'), 'rooms': (1, 2, 3),
         'cards': (charts.exposure, charts.price_distribution, charts.listing_vs_deal),
     },
     'affordability': {
-        'title': 'Доступность', 'filters': ('deal',),
+        'title': 'Доступність', 'filters': ('deal',),
         'cards': (charts.salary_history, charts.salary_positions, charts.sale_in_rent, charts.pets_rent),
     },
     'primary': {
-        'title': 'Новостройки', 'filters': ('cur',),
+        'title': 'Новобудови', 'filters': ('cur',),
         'cards': (charts.primary_classes, charts.developers_ranking, charts.developers_share, charts.parking_classes,
                   charts.construction, charts.lending, charts.commissioning),
     },
     'houses': {
-        'title': 'Дома', 'filters': ('deal', 'cur'),
+        'title': 'Будинки', 'filters': ('deal', 'cur'),
         'cards': (charts.houses_price, charts.houses_m2, charts.houses_districts),
     },
 }
@@ -65,7 +65,7 @@ def _context(filters, page, groups, **extra):
 def _deal_cur(filters, which=('deal', 'cur')):
     groups = []
     if 'deal' in which:
-        groups.append(_group('deal', 'Сделка', [(k, DEAL_LABELS[k]) for k in DEALS], filters.deal))
+        groups.append(_group('deal', 'Угода', [(k, DEAL_LABELS[k]) for k in DEALS], filters.deal))
     if 'cur' in which:
         groups.append(_group('cur', 'Валюта', [(c, CURRENCY_LABELS[c]) for c in CURRENCIES], filters.cur))
     return groups
@@ -90,15 +90,15 @@ def _prices_url(filters, **overrides) -> str:
 
 
 def _tiles(kpi: dict, cur: str) -> list[dict]:
-    when = f'{"предварительно, " if kpi["preliminary"] else ""}на {kpi["date"]:%d.%m.%Y}'
+    when = f'{"попередньо, " if kpi["preliminary"] else ""}на {kpi["date"]:%d.%m.%Y}'
     return [
-        {'label': 'Медиана цены м²', 'value': money(kpi['price_m2'], cur), 'hint': when, 'change': None},
-        {'label': 'Изменение за месяц', 'value': pct(kpi['m2_mom']),
-         'hint': f'к {kpi["month_ago"]:%d.%m.%Y}' if kpi['month_ago'] else 'нет точки месяц назад', 'change': None},
-        {'label': 'Изменение за год', 'value': pct(kpi['m2_yoy']),
-         'hint': f'к {kpi["year_ago"]:%d.%m.%Y}' if kpi['year_ago'] else 'нет точки год назад', 'change': None},
-        {'label': 'Объявлений', 'value': num(kpi['count']), 'hint': '1–3 комн.',
-         'change': kpi['count_mom'], 'change_hint': 'к прошлому месяцу'},
+        {'label': 'Медіана ціни м²', 'value': money(kpi['price_m2'], cur), 'hint': when, 'change': None},
+        {'label': 'Зміна за місяць', 'value': pct(kpi['m2_mom']),
+         'hint': f'до {kpi["month_ago"]:%d.%m.%Y}' if kpi['month_ago'] else 'немає точки місяць тому', 'change': None},
+        {'label': 'Зміна за рік', 'value': pct(kpi['m2_yoy']),
+         'hint': f'до {kpi["year_ago"]:%d.%m.%Y}' if kpi['year_ago'] else 'немає точки рік тому', 'change': None},
+        {'label': 'Оголошень', 'value': num(kpi['count']), 'hint': '1–3 кімн.',
+         'change': kpi['count_mom'], 'change_hint': 'до минулого місяця'},
     ]
 
 
@@ -109,7 +109,7 @@ def overview(request):
         return error
     kpi = queries.overview(filters)
     return render(request, 'dashboard/overview.html', _context(
-        filters, 'overview', _deal_cur(filters), heading_text=f'Обзор · {filters.city.name}', kpi=kpi,
+        filters, 'overview', _deal_cur(filters), heading_text=f'Огляд · {filters.city.name}', kpi=kpi,
         tiles=_tiles(kpi, filters.cur) if kpi else [],
         # m² is the same for every room count: one room's series is the city's
         chart_url=_prices_url(filters, rooms='1', **{'from': '', 'to': ''}),
@@ -124,9 +124,9 @@ def rooms(request):
     metric = request.GET.get('metric') or 'price'
     if metric not in dict(METRICS):
         return HttpResponseBadRequest('metric must be price or m2')
-    groups = _deal_cur(filters) + [_group('metric', 'Показатель', METRICS, metric)]
+    groups = _deal_cur(filters) + [_group('metric', 'Показник', METRICS, metric)]
     return render(request, 'dashboard/rooms.html', _context(
-        filters, 'rooms', groups, heading_text=f'По комнатности · {filters.city.name}', metric=metric, period=True,
+        filters, 'rooms', groups, heading_text=f'За кімнатністю · {filters.city.name}', metric=metric, period=True,
         chart_url=_prices_url(filters, **({'rooms': '1'} if metric == 'm2' else {})),
     ))
 
@@ -146,12 +146,12 @@ def lun_page(request, page):
     ctx = charts.Ctx(filters.city, filters.deal, filters.cur, room, repair, metric)
     groups = _deal_cur(filters, conf['filters'])
     if 'room' in conf['filters']:
-        groups.append(_group('room', 'Комнат', [(str(r), charts.ROOM[r].replace(' комн.', '')) for r in room_options],
+        groups.append(_group('room', 'Кімнат', [(str(r), charts.ROOM[r].replace(' кімн.', '')) for r in room_options],
                              str(room)))
     if 'repair' in conf['filters']:
         groups.append(_group('repair', 'Ремонт', REPAIRS, repair))
     if 'metric' in conf['filters']:
-        groups.append(_group('metric', 'Показатель', METRICS, metric))
+        groups.append(_group('metric', 'Показник', METRICS, metric))
     specs = [build(ctx) for build in conf['cards']]
     # "LUN does not publish it" only when LUN was asked: before the first collection of these endpoints say so
     collected = LunRaw.objects.filter(city=filters.city).exclude(endpoint__in=STAGE1_ENDPOINTS).exists()

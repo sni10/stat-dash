@@ -2,7 +2,7 @@
 <header class="sticky top-0 z-50 flex w-full shrink-0 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
   <div class="flex w-full items-center justify-between gap-3 px-3 py-3 xl:px-6 xl:py-4">
     <div class="flex min-w-0 items-center gap-3">
-      <button type="button" @click.stop="sidebarToggle = !sidebarToggle" aria-label="Свернуть меню"
+      <button type="button" @click.stop="sidebarToggle = !sidebarToggle" aria-label="Згорнути меню"
               class="inline-flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-gray-300 text-gray-500 shadow-theme-xs transition-all hover:bg-gray-50 hover:text-gray-800 lg:size-11 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-white">
         <svg width="16" height="12" viewBox="0 0 16 12" fill="none" aria-hidden="true">
           <path d="M1.33 1h13.34M1.33 11h13.34M1.33 6H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -12,7 +12,7 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <button type="button" aria-label="Тёмная тема"
+      <button type="button" aria-label="Темна тема"
               @click.prevent="darkMode = !darkMode; document.documentElement.classList.toggle('dark', darkMode); localStorage.setItem('darkMode', JSON.stringify(darkMode)); window.dispatchEvent(new CustomEvent('theme-changed'))"
               class="relative inline-flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-gray-300 text-gray-700 shadow-theme-xs transition-all hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-white">
         <svg x-cloak x-show="darkMode" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -28,7 +28,7 @@
       <form method="post" action="{% url 'logout' %}">
         {% csrf_token %}
         <button type="submit" class="inline-flex h-11 items-center rounded-[10px] border border-gray-300 px-4 text-sm font-medium text-gray-700 shadow-theme-xs transition-all hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50">
-          Выйти
+          Вийти
         </button>
       </form>
     </div>

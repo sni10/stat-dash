@@ -131,14 +131,14 @@ class PageTests(LoggedInTestCase):
         load()
         response = self.client.get(reverse('overview'))
         self.assertContains(response, money(1099.0, 'usd'))
-        self.assertContains(response, 'предварительно, на 10.01.2026')
+        self.assertContains(response, 'попередньо, на 10.01.2026')
         self.assertContains(response, pct(1099 / 1011 - 1))
         self.assertContains(response, 'data-mode="city-m2"')
         self.assertContains(response, '/api/prices?city=odesa&amp;deal=sale&amp;cur=usd&amp;rooms=1')
-        self.assertNotContains(response, 'Сбор давно не выполнялся')
+        self.assertNotContains(response, 'Збір давно не виконувався')
 
     def test_overview_without_data(self):
-        self.assertContains(self.client.get(reverse('overview')), 'ещё нет данных')
+        self.assertContains(self.client.get(reverse('overview')), 'ще немає даних')
 
     def test_rooms_page_modes(self):
         load()
@@ -147,7 +147,7 @@ class PageTests(LoggedInTestCase):
         self.assertContains(response, 'from=2025-06')
         response = self.client.get(reverse('rooms'), {'metric': 'm2'})
         self.assertContains(response, 'data-mode="city-m2"')
-        self.assertContains(response, 'линия одна')
+        self.assertContains(response, 'лінія одна')
         self.assertEqual(self.client.get(reverse('rooms'), {'metric': 'x'}).status_code, 400)
 
     def test_bad_filter_is_400(self):
@@ -155,7 +155,7 @@ class PageTests(LoggedInTestCase):
 
     def test_stale_banner(self):
         CollectRun.objects.create(started_at=timezone.now() - dt.timedelta(days=9), status=CollectRun.Status.OK)
-        self.assertContains(self.client.get(reverse('overview')), 'Сбор давно не выполнялся')
+        self.assertContains(self.client.get(reverse('overview')), 'Збір давно не виконувався')
 
     def test_all_cities_in_the_select_odesa_by_default(self):
         response = self.client.get(reverse('overview'))
@@ -164,7 +164,7 @@ class PageTests(LoggedInTestCase):
         City.objects.filter(slug='lviv').update(enabled=False)  # not collected any more: still selectable
         response = self.client.get(reverse('overview'), {'city': 'lviv'})
         self.assertContains(response, '<option value="lviv" selected>')
-        self.assertContains(response, 'ещё нет данных')
+        self.assertContains(response, 'ще немає даних')
 
 
 class ChartBuilderTests(TestCase):
@@ -184,22 +184,22 @@ class ChartBuilderTests(TestCase):
         self.assertEqual(spec['series'][0]['data'][0], 4 * 10000 * 2)  # UAH / usdToUah
         renovated = charts.flat_districts(self.ctx(room=2, repair='renovated', cur='uah'))
         self.assertAlmostEqual(renovated['series'][0]['data'][0], 4 * 10000 * 2 * 40 * 1.2)
-        self.assertIn('с ремонтом', renovated['title'])
+        self.assertIn('з ремонтом', renovated['title'])
         m2 = charts.flat_districts(self.ctx(room=1, metric='m2'))
         self.assertAlmostEqual(m2['series'][0]['data'][0], 4 * 10000 / 40)
 
     def test_exposure_series_all_rooms_first_and_no_4_plus(self):
         spec = charts.exposure(self.ctx(deal='rent'))
-        self.assertEqual([s['name'] for s in spec['series']], ['Все', '1 комн.', '2 комн.', '3 комн.'])
+        self.assertEqual([s['name'] for s in spec['series']], ['Усі', '1 кімн.', '2 кімн.', '3 кімн.'])
         self.assertEqual(spec['series'][0]['data'][-1], {'x': '2025-12-24', 'y': 35})
-        self.assertIn('сдаётся', spec['title'])
+        self.assertIn('здається', spec['title'])
 
     def test_price_distribution_currency_and_open_bucket(self):
         rent_uah = charts.price_distribution(self.ctx(deal='rent', cur='uah'))
-        self.assertEqual(rent_uah['categories'][0], '0–4 тыс. ₴')
-        self.assertEqual(rent_uah['categories'][-1], 'от 16 тыс. ₴')
+        self.assertEqual(rent_uah['categories'][0], '0–4 тис. ₴')
+        self.assertEqual(rent_uah['categories'][-1], 'від 16 тис. ₴')
         sale_uah = charts.price_distribution(self.ctx(deal='sale', cur='uah'))
-        self.assertIn('только в USD', sale_uah['subtitle'])  # sale is published in USD only
+        self.assertIn('лише в USD', sale_uah['subtitle'])  # sale is published in USD only
         self.assertTrue(sale_uah['categories'][0].endswith('$'))
 
     def test_price_distribution_folds_the_long_tail(self):
@@ -210,18 +210,18 @@ class ChartBuilderTests(TestCase):
         load({('price-distribution', None): _ok(rows)})
         spec = charts.price_distribution(self.ctx())
         self.assertEqual(len(spec['categories']), 11)  # 10 full buckets hold 97%+, then one "from" bucket
-        self.assertEqual(spec['categories'][-1], 'от 10 тыс. $')
+        self.assertEqual(spec['categories'][-1], 'від 10 тис. $')
         self.assertEqual(spec['series'][0]['data'][-1], 70)
         self.assertEqual(len(spec['series']), 1)  # one room count
 
     def test_listing_vs_deal(self):
         spec = charts.listing_vs_deal(self.ctx(room=3))
-        self.assertEqual([s['name'] for s in spec['series']], ['В объявлении', 'Сделка'])
+        self.assertEqual([s['name'] for s in spec['series']], ['В оголошенні', 'Угода'])
         self.assertEqual(spec['series'][1]['data'][-1]['y'], 40000 * 3 * 0.9)
 
     def test_affordability(self):
         sale = charts.salary_history(self.ctx())
-        self.assertEqual((sale['unit'], sale['series'][0]['data'][-1]['y']), ('лет', 7.0))
+        self.assertEqual((sale['unit'], sale['series'][0]['data'][-1]['y']), ('р.', 7.0))
         rent = charts.salary_history(self.ctx(deal='rent'))
         self.assertEqual((rent['unit'], rent['series'][2]['data'][-1]['y']), ('%', 60.0))
         positions = charts.salary_positions(self.ctx())
@@ -230,22 +230,22 @@ class ChartBuilderTests(TestCase):
         self.assertEqual(charts.sale_in_rent(self.ctx())['series'][0]['data'][-1]['y'], 16.0)
 
     def test_pets_rent_only_where_published(self):
-        self.assertIn('Киева и Львова', charts.pets_rent(self.ctx())['empty'])
+        self.assertIn('Києва та Львова', charts.pets_rent(self.ctx())['empty'])
         kyiv = charts.pets_rent(charts.Ctx(City.objects.get(slug='kyiv')))
         self.assertIsNone(kyiv['empty'])
         self.assertEqual(kyiv['values'], [20.0, 30.0, 10.0, 40.0])
 
     def test_new_buildings(self):
         classes = charts.primary_classes(self.ctx())
-        self.assertEqual(classes['series'][-1]['name'], 'Средняя по городу')
+        self.assertEqual(classes['series'][-1]['name'], 'Середня по місту')
         parking = charts.parking_classes(self.ctx())
-        self.assertEqual(parking['categories'], ['Эконом', 'Комфорт', 'Бизнес', 'Премиум'])
+        self.assertEqual(parking['categories'], ['Економ', 'Комфорт', 'Бізнес', 'Преміум'])
         self.assertEqual(parking['series'][0]['data'], [15000.0, 60000.0, 30000.0, 45000.0])  # classId 1, 4, 2, 3
         ranking = charts.developers_ranking(self.ctx())
         self.assertIn('2025', ranking['title'])
         self.assertEqual(ranking['series'][0]['data'], [1000, 900, 800])
         share = charts.developers_share(self.ctx())
-        self.assertEqual((share['labels'][-1], share['values'][-1]), ('Остальные', 40.0))
+        self.assertEqual((share['labels'][-1], share['values'][-1]), ('Інші', 40.0))
         build = charts.construction(self.ctx())
         self.assertEqual(build['series'][0]['data'], [220, 79, 7, 896])
         self.assertEqual(build['series'][1]['data'], [440, 158, 14, 1792])
@@ -272,7 +272,7 @@ class ChartBuilderTests(TestCase):
         spec = charts.flat_districts(self.ctx())
         self.assertEqual(len(spec['categories']), 20)
         self.assertEqual((spec['categories'][0], spec['series'][0]['data'][0]), ('Мікрорайон 30', 30000.0))
-        self.assertIn('20 самых дорогих из 30', spec['subtitle'])
+        self.assertIn('20 найдорожчих із 30', spec['subtitle'])
         self.assertEqual(charts.flat_districts(self.ctx(metric='m2'))['series'][0]['data'][0], 900.0)
         self.assertEqual(charts.flat_districts(self.ctx(cur='uah'))['series'][0]['data'][0], 1200000.0)
 
@@ -305,7 +305,7 @@ class LunPagesTests(LoggedInTestCase):
     def test_page_filters(self):
         load()
         response = self.client.get(reverse('districts'), {'room': '2', 'repair': 'not', 'metric': 'm2'})
-        self.assertContains(response, 'без ремонта')
+        self.assertContains(response, 'без ремонту')
         self.assertNotContains(self.client.get(reverse('market')), 'name="room" value="4"')
         for params in ({'room': '4'}, {'repair': 'x'}, {'metric': 'x'}):
             with self.subTest(params=params):
@@ -314,14 +314,14 @@ class LunPagesTests(LoggedInTestCase):
     def test_city_not_collected_yet_says_so(self):
         response = self.client.get(reverse('primary'), {'city': 'lviv'})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'ещё не собраны')
-        self.assertNotContains(response, 'не публикует')
+        self.assertContains(response, 'ще не зібрані')
+        self.assertNotContains(response, 'не публікує')
 
     def test_collected_city_without_some_data_says_lun_does_not_publish(self):
         load()
         response = self.client.get(reverse('affordability'), {'city': 'odesa'})
-        self.assertContains(response, 'только для Киева и Львова')  # pets-rent: LUN has it for 2 cities only
-        self.assertNotContains(response, 'ещё не собраны')
+        self.assertContains(response, 'лише для Києва та Львова')  # pets-rent: LUN has it for 2 cities only
+        self.assertNotContains(response, 'ще не зібрані')
 
     def test_pages_need_login(self):
         self.client.logout()
@@ -329,7 +329,7 @@ class LunPagesTests(LoggedInTestCase):
 
     def test_sidebar_lists_the_pages(self):
         response = self.client.get(reverse('overview'))
-        for title in ('Районы', 'Рынок', 'Доступность', 'Новостройки', 'Дома'):
+        for title in ('Райони', 'Ринок', 'Доступність', 'Новобудови', 'Будинки'):
             self.assertContains(response, title)
 
 

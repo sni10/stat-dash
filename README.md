@@ -1,5 +1,21 @@
 # stat-dash
 
+[![CI](https://github.com/sni10/stat-dash/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sni10/stat-dash/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/sni10/stat-dash?sort=semver)](https://github.com/sni10/stat-dash/releases)
+[![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsni10%2Fstat-dash%2Fbadges%2Ftests.json)](https://github.com/sni10/stat-dash/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsni10%2Fstat-dash%2Fbadges%2Fcoverage.json)](https://github.com/sni10/stat-dash/actions/workflows/ci.yml)
+[![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fsni10%2Fstat--dash-2496ED?logo=docker&logoColor=white)](https://github.com/sni10/stat-dash/pkgs/container/stat-dash)
+[![Last commit](https://img.shields.io/github/last-commit/sni10/stat-dash)](https://github.com/sni10/stat-dash/commits/main)
+
+[![Python](https://img.shields.io/badge/python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Django](https://img.shields.io/badge/django-6.1-092E20?logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![PostgreSQL](https://img.shields.io/badge/postgresql-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![uv](https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
+[![Tailwind CSS](https://img.shields.io/badge/tailwind_css-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![TailAdmin](https://img.shields.io/badge/ui-TailAdmin-465FFF)](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
+[![Conventional Commits](https://img.shields.io/badge/conventional_commits-1.0.0-FE5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/)
+[![semantic-release](https://img.shields.io/badge/semantic--release-python-e10079)](https://python-semantic-release.readthedocs.io/)
+
 A personal dashboard of housing price dynamics in Ukraine built on [LUN Statistics](https://lun.ua/stat) data.
 Once a week it collects listing prices (sale and rent, by room count) into Postgres and keeps the history.
 
@@ -60,7 +76,8 @@ uv run python manage.py test
 (cd frontend && npm ci && npm run build)   # after changing templates: rebuilds dashboard/static (committed)
 ```
 
-UI theme: [TailAdmin](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) free, MIT.
+UI theme: [TailAdmin](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) free, MIT. The interface
+is in Ukrainian (`LANGUAGE_CODE = 'uk'`, numbers and dates in `uk-UA`); code, comments and docs are in English.
 
 Commits follow Conventional Commits: releases (`vX.Y.Z` tags, GitHub Releases, `ghcr.io` images) are made by CI
 from them.

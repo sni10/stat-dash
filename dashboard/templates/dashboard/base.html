@@ -1,5 +1,5 @@
 {% load static %}<!doctype html>
-<html lang="ru">
+<html lang="uk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -30,21 +30,21 @@
       <div class="mx-auto max-w-(--breakpoint-2xl) p-4 pb-20 md:p-6 md:pb-6">
         {% if collection.stale %}
           <div role="alert" class="mb-6 rounded-xl border border-amber-500 bg-amber-50 p-4 text-sm text-gray-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-white/90">
-            <strong class="font-semibold">Сбор давно не выполнялся.</strong>
+            <strong class="font-semibold">Збір давно не виконувався.</strong>
             {% if collection.last_success %}
-              Последний успешный — {{ collection.last_success.started_at|date:"d.m.Y H:i" }}.
+              Останній успішний — {{ collection.last_success.started_at|date:"d.m.Y H:i" }}.
             {% else %}
-              Успешных сборов ещё не было.
+              Успішних зборів ще не було.
             {% endif %}
-            Проверьте контейнер <code class="font-mono">scheduler</code>.
+            Перевірте контейнер <code class="font-mono">scheduler</code>.
           </div>
         {% endif %}
 
         {% block content %}{% endblock %}
 
         <p class="mt-8 text-xs text-gray-400 dark:text-gray-500">
-          Данные: <a class="underline hover:text-brand-500" href="https://lun.ua/stat" rel="noopener" target="_blank">ЛУН Статистика</a>.
-          Цены объявлений, не сделок. Только для личного использования.
+          Дані: <a class="underline hover:text-brand-500" href="https://lun.ua/stat" rel="noopener" target="_blank">ЛУН Статистика</a>.
+          Ціни оголошень, а не угод. Лише для особистого використання.
         </p>
       </div>
     </main>

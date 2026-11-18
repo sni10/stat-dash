@@ -16,9 +16,9 @@ from collector.models import City
 from .lun_data import latest
 
 SYMBOL = {'usd': '$', 'uah': '₴'}
-ROOM = {None: 'Все', 1: '1 комн.', 2: '2 комн.', 3: '3 комн.'}  # 4+ rooms are not shown
+ROOM = {None: 'Усі', 1: '1 кімн.', 2: '2 кімн.', 3: '3 кімн.'}  # 4+ rooms are not shown
 DEAL_IDS = {'sale': 1, 'rent': 2}
-NO_DATA = 'ЛУН не публикует эти данные для выбранного города.'
+NO_DATA = 'ЛУН не публікує ці дані для вибраного міста.'
 MAX_DISTRICTS = 20  # some cities have ~150 micro-districts
 
 
@@ -41,7 +41,7 @@ class Ctx:
 
     @property
     def per_month(self) -> str:
-        return ' в месяц' if self.deal == 'rent' else ''
+        return ' на місяць' if self.deal == 'rent' else ''
 
 
 def _spec(title, subtitle='', *, type='line', unit='', digits=0, series=(), categories=None, labels=None,
@@ -107,15 +107,15 @@ def flat_districts(ctx: Ctx):
     rows.sort(key=lambda r: -value(r))
     shown = rows[:MAX_DISTRICTS]
     values = [value(r) for r in shown]
-    what = 'цена квартиры' if ctx.metric == 'price' else 'цена м²'
-    repair = {'all': '', 'renovated': ', с ремонтом', 'not': ', без ремонта'}[ctx.repair]
+    what = 'ціна квартири' if ctx.metric == 'price' else 'ціна м²'
+    repair = {'all': '', 'renovated': ', з ремонтом', 'not': ', без ремонту'}[ctx.repair]
     when = f' на {rows[0].date:%d.%m.%Y}' if rows else ''
-    top = f' {MAX_DISTRICTS} самых дорогих из {len(rows)}.' if len(rows) > MAX_DISTRICTS else ''
+    top = f' {MAX_DISTRICTS} найдорожчих із {len(rows)}.' if len(rows) > MAX_DISTRICTS else ''
     return _spec(
-        f'{"Аренда" if ctx.deal == "rent" else "Вторичка"}: медианная {what}, {ROOM[ctx.room]}{repair}',
-        f'По районам{when}. {ctx.cur.upper()}{ctx.per_month}.{top}',
+        f'{"Оренда" if ctx.deal == "rent" else "Вторинка"}: медіанна {what}, {ROOM[ctx.room]}{repair}',
+        f'За районами{when}. {ctx.cur.upper()}{ctx.per_month}.{top}',
         type='hbar', unit=ctx.symbol, categories=[r.districtName or str(r.districtId) for r in shown],
-        series=[{'name': 'Медиана', 'data': values}], height=60 + 36 * max(len(shown), 1),
+        series=[{'name': 'Медіана', 'data': values}], height=60 + 36 * max(len(shown), 1),
     )
 
 
@@ -125,27 +125,27 @@ def _average_by_district(endpoint, ctx, title, subtitle):
     when = f' на {rows[0].month:%d.%m.%Y}' if rows else ''
     names = [r.label if isinstance(r.label, str) else r.label.uk for r in rows]
     return _spec(title, subtitle + when + '.', type='hbar', unit=ctx.symbol, categories=names,
-                 series=[{'name': 'Медиана', 'data': [_usd_uah(ctx, r.averageUsd, r.averageUah) for r in rows]}],
+                 series=[{'name': 'Медіана', 'data': [_usd_uah(ctx, r.averageUsd, r.averageUah) for r in rows]}],
                  height=60 + 44 * max(len(rows), 1))
 
 
 def primary_districts(ctx: Ctx):
-    return _average_by_district('districts', ctx, 'Новостройки: стартовая цена м² по районам',
-                                f'Медиана стартовой цены от застройщиков, {ctx.cur.upper()}')
+    return _average_by_district('districts', ctx, 'Новобудови: стартова ціна м² за районами',
+                                f'Медіана стартової ціни від забудовників, {ctx.cur.upper()}')
 
 
 def parking_districts(ctx: Ctx):
-    return _average_by_district('parking-districts', ctx, 'Паркоместо в новостройке по районам',
-                                f'Медиана стартовой цены, {ctx.cur.upper()}')
+    return _average_by_district('parking-districts', ctx, 'Паркомісце в новобудові за районами',
+                                f'Медіана стартової ціни, {ctx.cur.upper()}')
 
 
 # --- Market -----------------------------------------------------------------------------------------------
 
 def exposure(ctx: Ctx):
     data = [r for r in latest('median-exposure', ctx.city) or [] if r.contractType == ctx.ct and r.roomCount in ROOM]
-    verb = 'сдаётся' if ctx.deal == 'rent' else 'продаётся'
+    verb = 'здається' if ctx.deal == 'rent' else 'продається'
     return _spec(
-        f'Как быстро квартира {verb}', 'Медианный срок экспозиции объявления, дней.',
+        f'Як швидко квартира {verb}', 'Медіанний строк експозиції оголошення, днів.',
         unit='дн.', series=_series_by(data, lambda r: r.roomCount, lambda r: r.dateStr, lambda r: r.exposure,
                                       name=lambda g: ROOM[g]),
         preliminary=_today(data, lambda r: r.dateStr),
@@ -154,8 +154,8 @@ def exposure(ctx: Ctx):
 
 def _bucket_label(start, end, symbol):
     def short(v):
-        return f'{v / 1000:g} тыс.' if v >= 1000 else f'{v:g}'
-    return f'от {short(start)} {symbol}' if end is None else f'{short(start)}–{short(end)} {symbol}'
+        return f'{v / 1000:g} тис.' if v >= 1000 else f'{v:g}'
+    return f'від {short(start)} {symbol}' if end is None else f'{short(start)}–{short(end)} {symbol}'
 
 
 def price_distribution(ctx: Ctx):
@@ -166,7 +166,7 @@ def price_distribution(ctx: Ctx):
     rows = [r for r in data if r.currencyId == currency]
     note = ''
     if not rows and data:  # sale is published in USD only
-        rows, currency, note = [r for r in data if r.currencyId == 1], 1, ' ЛУН публикует продажу только в USD.'
+        rows, currency, note = [r for r in data if r.currencyId == 1], 1, ' ЛУН публікує продаж лише в USD.'
     symbol = '$' if currency == 1 else '₴'
     buckets = sorted({(r.priceStart, r.priceEnd) for r in rows}, key=lambda b: b[0])
     counts = defaultdict(int)
@@ -189,8 +189,8 @@ def price_distribution(ctx: Ctx):
         buckets = buckets[:cut] + [(start, None)]
     when = f' на {rows[0].date:%d.%m.%Y}' if rows else ''
     return _spec(
-        'Самые распространённые цены' + (' аренды' if ctx.deal == 'rent' else '') + f', {ROOM[ctx.room]}',
-        f'Число объявлений по ценовым интервалам{when}.{note}', type='bar', unit='объявл.',
+        'Найпоширеніші ціни' + (' оренди' if ctx.deal == 'rent' else '') + f', {ROOM[ctx.room]}',
+        f'Кількість оголошень за ціновими інтервалами{when}.{note}', type='bar', unit='оголош.',
         categories=[_bucket_label(s, e, symbol) for s, e in buckets],
         series=[{'name': ROOM[room], 'data': [counts.get((room, s, e), 0) for s, e in buckets]} for room in rooms],
         height=360,
@@ -202,10 +202,10 @@ def listing_vs_deal(ctx: Ctx):
     listing = [_P(r.dateStr, _usd_uah(ctx, r.priceUsd, r.price)) for r in data]
     deal = [_P(r.dateStr, _usd_uah(ctx, r.dealPriceUsd, r.dealPrice)) for r in data]
     return _spec(
-        f'Цена в объявлении и цена сделки, {ROOM[ctx.room]}',
-        f'Медианы по данным риелторов, {ctx.cur.upper()}{ctx.per_month}. Разница — торг.',
-        unit=ctx.symbol, series=[{'name': 'В объявлении', 'data': _line(listing)},
-                                 {'name': 'Сделка', 'data': _line(deal)}],
+        f'Ціна в оголошенні і ціна угоди, {ROOM[ctx.room]}',
+        f'Медіани за даними рієлторів, {ctx.cur.upper()}{ctx.per_month}. Різниця — торг.',
+        unit=ctx.symbol, series=[{'name': 'В оголошенні', 'data': _line(listing)},
+                                 {'name': 'Угода', 'data': _line(deal)}],
         preliminary=_today(data, lambda r: r.dateStr),
     )
 
@@ -215,11 +215,11 @@ def listing_vs_deal(ctx: Ctx):
 def salary_history(ctx: Ctx):
     data = [r for r in latest('salary-history', ctx.city) or [] if r.contractTypeId == ctx.ct and r.roomCount in ROOM]
     if ctx.deal == 'rent':
-        title, subtitle, unit, digits = ('Доля зарплаты, которая уходит на аренду',
-                                         'Медианная аренда в % от медианной зарплаты (work.ua).', '%', 0)
+        title, subtitle, unit, digits = ('Частка зарплати, що йде на оренду',
+                                         'Медіанна оренда у % від медіанної зарплати (work.ua).', '%', 0)
     else:
-        title, subtitle, unit, digits = ('Цена квартиры в годах зарплаты',
-                                         'Сколько лет копить всю медианную зарплату (work.ua).', 'лет', 1)
+        title, subtitle, unit, digits = ('Ціна квартири в роках зарплати',
+                                         'Скільки років відкладати всю медіанну зарплату (work.ua).', 'р.', 1)
     return _spec(title, subtitle, unit=unit, digits=digits,
                  series=_series_by(data, lambda r: r.roomCount, lambda r: r.date.date(), lambda r: r.value,
                                    name=lambda g: ROOM[g]),
@@ -235,8 +235,8 @@ def salary_positions(ctx: Ctx):
     rooms = sorted({r.roomCount for r in data})
     rent = ctx.deal == 'rent'
     return _spec(
-        'Доля зарплаты на аренду по профессиям' if rent else 'Цена квартиры в годах зарплаты по профессиям',
-        'Медианные зарплаты профессий по данным work.ua.', type='hbar', unit='%' if rent else 'лет',
+        'Частка зарплати на оренду за професіями' if rent else 'Ціна квартири в роках зарплати за професіями',
+        'Медіанні зарплати професій за даними work.ua.', type='hbar', unit='%' if rent else 'р.',
         digits=0 if rent else 1, categories=professions,
         series=[{'name': ROOM[room], 'data': [value.get((room, p)) for p in professions]} for room in rooms],
         height=80 + 36 * max(len(professions), 1),
@@ -245,8 +245,8 @@ def salary_positions(ctx: Ctx):
 
 def sale_in_rent(ctx: Ctx):
     data = [r for r in latest('sale-in-rent-history', ctx.city) or [] if r.roomCount in ROOM]
-    return _spec('Цена квартиры в годах аренды', 'За сколько лет аренда окупает покупку той же квартиры.',
-                 unit='лет', digits=1,
+    return _spec('Ціна квартири в роках оренди', 'За скільки років оренда окупає купівлю тієї ж квартири.',
+                 unit='р.', digits=1,
                  series=_series_by(data, lambda r: r.roomCount, lambda r: r.date, lambda r: r.value,
                                    name=lambda g: ROOM[g]),
                  preliminary=_today(data, lambda r: r.date))
@@ -257,17 +257,17 @@ def pets_rent(ctx: Ctx):
             if r.cityId == ctx.city.id and r.realtyType == 'flat' and r.regionType == 'city']
     row = rows[0] if rows else None
     return _spec(
-        'Аренда с домашними животными', 'Доля объявлений квартир.', type='donut', unit='%', digits=1,
-        labels=['Можно', 'По договорённости', 'Нельзя', 'Не указано'],
+        'Оренда з домашніми тваринами', 'Частка оголошень квартир.', type='donut', unit='%', digits=1,
+        labels=['Можна', 'За домовленістю', 'Не можна', 'Не вказано'],
         values=[row.yesPercent, row.somePercent, row.noPercent, row.unknownPercent] if row else [],
-        empty='ЛУН публикует это только для Киева и Львова.',
+        empty='ЛУН публікує це лише для Києва та Львова.',
     )
 
 
 # --- New buildings ----------------------------------------------------------------------------------------
 
-CLASS_NAMES = {'економ': 'Эконом', 'комфорт': 'Комфорт', 'бізнес': 'Бизнес', 'преміум': 'Премиум'}
-CLASS_ORDER = ['Эконом', 'Комфорт', 'Бизнес', 'Премиум']
+CLASS_NAMES = {'економ': 'Економ', 'комфорт': 'Комфорт', 'бізнес': 'Бізнес', 'преміум': 'Преміум'}
+CLASS_ORDER = ['Економ', 'Комфорт', 'Бізнес', 'Преміум']
 
 
 def primary_classes(ctx: Ctx):
@@ -275,26 +275,26 @@ def primary_classes(ctx: Ctx):
     items = []
     if data is not None:
         items = [(CLASS_NAMES.get(r.label, r.label), r) for r in data.cityClasses]
-        items += [('Средняя по городу', r) for r in data.cityAvg]
+        items += [('Середня по місту', r) for r in data.cityAvg]
     # 0 = no listings that month (spring 2022): a gap, not a price
     series = _series_by(items, lambda i: i[0], lambda i: i[1].monthDate,
                         lambda i: _usd_uah(ctx, i[1].averageUsd, i[1].averageUah) or None,
-                        order=CLASS_ORDER + ['Средняя по городу'])
-    return _spec('Новостройки: стартовая цена м² по классам',
-                 f'Медиана стартовой цены от застройщиков, {ctx.cur.upper()}.', unit=ctx.symbol, series=series,
+                        order=CLASS_ORDER + ['Середня по місту'])
+    return _spec('Новобудови: стартова ціна м² за класами',
+                 f'Медіана стартової ціни від забудовників, {ctx.cur.upper()}.', unit=ctx.symbol, series=series,
                  preliminary=[i[1].monthDate.isoformat() for i in items if i[1].isToday])
 
 
-PARKING_CLASSES = {1: 'Эконом', 4: 'Комфорт', 2: 'Бизнес', 3: 'Премиум'}  # LUN's classId, in display order
+PARKING_CLASSES = {1: 'Економ', 4: 'Комфорт', 2: 'Бізнес', 3: 'Преміум'}  # LUN's classId, in display order
 
 
 def parking_classes(ctx: Ctx):
     data = latest('parking-classes', ctx.city) or []
     value = {(r.regionType, r.classId): _usd_uah(ctx, r.medianUsd, r.medianUah) for r in data}
-    return _spec('Паркоместо в новостройке по классу дома', f'Медиана стартовой цены, {ctx.cur.upper()}.',
+    return _spec('Паркомісце в новобудові за класом будинку', f'Медіана стартової ціни, {ctx.cur.upper()}.',
                  type='bar', unit=ctx.symbol, categories=list(PARKING_CLASSES.values()),
                  series=[{'name': name, 'data': [value.get((region, c)) for c in PARKING_CLASSES]}
-                         for region, name in (('city', 'Город'), ('region', 'Область'))
+                         for region, name in (('city', 'Місто'), ('region', 'Область'))
                          if any((region, c) in value for c in PARKING_CLASSES)])
 
 
@@ -306,9 +306,9 @@ def developers_ranking(ctx: Ctx):
     data = latest('developers-ranking', ctx.city) or []
     year = _latest_year(data)
     rows = sorted((r for r in data if r.year == year), key=lambda r: -r.count)[:10]
-    return _spec(f'Топ застройщиков по сданным квартирам{f", {year}" if year else ""}',
-                 'Город и область, по сертификатам о вводе в эксплуатацию.', type='hbar', unit='кв.',
-                 categories=[r.name for r in rows], series=[{'name': 'Сдано квартир', 'data': [r.count for r in rows]}],
+    return _spec(f'Топ забудовників за зданими квартирами{f", {year}" if year else ""}',
+                 'Місто та область, за сертифікатами про введення в експлуатацію.', type='hbar', unit='кв.',
+                 categories=[r.name for r in rows], series=[{'name': 'Здано квартир', 'data': [r.count for r in rows]}],
                  height=60 + 36 * max(len(rows), 1))
 
 
@@ -319,9 +319,9 @@ def developers_share(ctx: Ctx):
     labels, values = [r.name for r in rows], [r.value for r in rows]
     rest = round(100 - sum(values), 1)
     if rows and rest > 0.5:
-        labels.append('Остальные')
+        labels.append('Інші')
         values.append(rest)
-    return _spec(f'Доли застройщиков{f", {year}" if year else ""}', '% сданных квартир.', type='donut', unit='%',
+    return _spec(f'Частки забудовників{f", {year}" if year else ""}', '% зданих квартир.', type='donut', unit='%',
                  digits=1, labels=labels, values=values)
 
 
@@ -338,15 +338,15 @@ def _city_region_bar(endpoint, ctx, title, subtitle, keys):
 
 
 def construction(ctx: Ctx):
-    return _city_region_bar('sections', ctx, 'Активность строительства', 'Секций жилых комплексов.', {
-        'active': 'В продаже', 'under_construct': 'Строится', 'preparatory_work': 'Котлованы',
-        'built': 'Построено с 2010',
+    return _city_region_bar('sections', ctx, 'Активність будівництва', 'Секцій житлових комплексів.', {
+        'active': 'У продажу', 'under_construct': 'Будується', 'preparatory_work': 'Котловани',
+        'built': 'Збудовано з 2010',
     })
 
 
 def lending(ctx: Ctx):
-    return _city_region_bar('lending', ctx, 'Новостройки с долгосрочной оплатой', 'Число жилых комплексов.', {
-        'installments': 'Рассрочка от застройщика', 'mortgagesYeOselya': 'Ипотека «єОселя»', 'credits': 'Кредит',
+    return _city_region_bar('lending', ctx, 'Новобудови з довгостроковими виплатами', 'Кількість житлових комплексів.', {
+        'installments': 'Розтермінування від забудовника', 'mortgagesYeOselya': 'Іпотека «єОселя»', 'credits': 'Кредит',
     })
 
 
@@ -359,10 +359,10 @@ def commissioning(ctx: Ctx):
         years[r.year][2] = max(years[r.year][2], r.quarter)
     ordered = sorted(years)[-9:]
     last = f' (за {years[ordered[-1]][2]} кв.)' if ordered and years[ordered[-1]][2] < 4 else ''
-    return _spec('Ввод жилья в эксплуатацию', f'Область, Госстат, млн м² в год{last}.', type='bar', unit='млн м²',
+    return _spec('Введення житла в експлуатацію', f'Область, Держстат, млн м² на рік{last}.', type='bar', unit='млн м²',
                  digits=2, categories=[str(y) for y in ordered],
-                 series=[{'name': 'Всё жильё', 'data': [round(years[y][0] / 1e6, 3) for y in ordered]},
-                         {'name': 'Многоквартирные', 'data': [round(years[y][1] / 1e6, 3) for y in ordered]}])
+                 series=[{'name': 'Усе житло', 'data': [round(years[y][0] / 1e6, 3) for y in ordered]},
+                         {'name': 'Багатоквартирні', 'data': [round(years[y][1] / 1e6, 3) for y in ordered]}])
 
 
 # --- Houses -----------------------------------------------------------------------------------------------
@@ -378,14 +378,14 @@ def _houses(ctx, metric):
 
 def houses_price(ctx: Ctx):
     data, series = _houses(ctx, 'price')
-    return _spec(f'Дома: медианная цена{" аренды" if ctx.deal == "rent" else ""}',
+    return _spec(f'Будинки: медіанна ціна{" оренди" if ctx.deal == "rent" else ""}',
                  f'{ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol, series=series,
                  preliminary=_today(data, lambda r: r.date))
 
 
 def houses_m2(ctx: Ctx):
     data, series = _houses(ctx, 'm2')
-    return _spec('Дома: медианная цена м²', f'{ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol, series=series,
+    return _spec('Будинки: медіанна ціна м²', f'{ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol, series=series,
                  digits=0 if ctx.cur == 'uah' or ctx.deal == 'sale' else 2,
                  preliminary=_today(data, lambda r: r.date))
 
@@ -394,9 +394,9 @@ def houses_districts(ctx: Ctx):
     data = [r for r in latest('districts-house-price', ctx.city) or [] if r.contractTypeId == ctx.ct]
     rows = sorted(data, key=lambda r: -(r.medianUsd or 0))
     when = f' на {rows[0].date:%d.%m.%Y}' if rows else ''
-    return _spec('Дома: медианная цена по районам', f'USD{when}. ЛУН публикует только продажу в USD.',
+    return _spec('Будинки: медіанна ціна за районами', f'USD{when}. ЛУН публікує лише продаж у USD.',
                  type='hbar', unit='$', categories=[r.nameUk for r in rows],
-                 series=[{'name': 'Медиана', 'data': [r.medianUsd for r in rows]}],
+                 series=[{'name': 'Медіана', 'data': [r.medianUsd for r in rows]}],
                  height=60 + 44 * max(len(rows), 1))
 
 

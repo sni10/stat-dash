@@ -1,7 +1,7 @@
 {# GET form; every change reloads the page with the new filters. Groups: views._group(name, label, options, value) #}
-<form method="get" class="mb-6 flex flex-wrap items-end gap-3" aria-label="Фильтры">
+<form method="get" class="mb-6 flex flex-wrap items-end gap-3" aria-label="Фільтри">
   <label class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-    Город
+    Місто
     <select name="city" onchange="this.form.submit()" class="h-11 rounded-lg border border-gray-300 bg-white px-4 pr-9 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
       {% for c in cities %}<option value="{{ c.slug }}" {% if c.pk == f.city.pk %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
     </select>
@@ -23,16 +23,16 @@
 
   {% if period %}
     <label class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-      С месяца
+      З місяця
       <input type="month" name="from" value="{{ f.date_from|date:'Y-m' }}" onchange="this.form.submit()" class="h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:[color-scheme:dark]">
     </label>
     <label class="flex flex-col gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-      По месяц
+      По місяць
       <input type="month" name="to" value="{{ f.date_to|date:'Y-m' }}" onchange="this.form.submit()" class="h-11 rounded-lg border border-gray-300 bg-white px-4 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:ring-3 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:[color-scheme:dark]">
     </label>
     {% if f.date_from or f.date_to %}
-      <a href="?city={{ f.city.slug }}&amp;deal={{ f.deal }}&amp;cur={{ f.cur }}&amp;metric={{ metric }}" class="flex h-11 items-center px-2 text-sm font-medium text-brand-500 hover:text-brand-600">Весь период</a>
+      <a href="?city={{ f.city.slug }}&amp;deal={{ f.deal }}&amp;cur={{ f.cur }}&amp;metric={{ metric }}" class="flex h-11 items-center px-2 text-sm font-medium text-brand-500 hover:text-brand-600">Весь період</a>
     {% endif %}
   {% endif %}
-  <noscript><button type="submit" class="h-11 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white">Показать</button></noscript>
+  <noscript><button type="submit" class="h-11 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white">Показати</button></noscript>
 </form>
