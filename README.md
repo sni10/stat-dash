@@ -13,8 +13,6 @@
 [![uv](https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![Tailwind CSS](https://img.shields.io/badge/tailwind_css-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![TailAdmin](https://img.shields.io/badge/ui-TailAdmin-465FFF)](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
-[![Conventional Commits](https://img.shields.io/badge/conventional_commits-1.0.0-FE5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/)
-[![semantic-release](https://img.shields.io/badge/semantic--release-python-e10079)](https://python-semantic-release.readthedocs.io/)
 
 A personal dashboard of housing price dynamics in Ukraine built on [LUN Statistics](https://lun.ua/stat) data.
 Once a week it collects listing prices (sale and rent, by room count) into Postgres and keeps the history.
