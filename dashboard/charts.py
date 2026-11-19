@@ -18,7 +18,7 @@ from .lun_data import latest
 SYMBOL = {'usd': '$', 'uah': '₴'}
 ROOM = {None: 'Усі', 1: '1 кімн.', 2: '2 кімн.', 3: '3 кімн.'}  # 4+ rooms are not shown
 DEAL_IDS = {'sale': 1, 'rent': 2}
-NO_DATA = 'ЛУН не публікує ці дані для вибраного міста.'
+NO_DATA = 'Відсутні дані для вибраного міста.'
 MAX_DISTRICTS = 20  # some cities have ~150 micro-districts
 
 
