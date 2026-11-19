@@ -4,6 +4,7 @@ from .queries import collection_status
 
 # Sidebar entries of the extra pages (views.PAGES), with simple line icons (24x24 path data)
 NAV_PAGES = [
+    {'name': 'cities', 'title': 'Міста', 'icon': 'M3.5 20.25h17M5.75 20.25v-9.5h4v9.5M10.75 20.25V4.75h4.5v15.5M15.25 20.25v-7h3.5v7'},
     {'name': 'districts', 'title': 'Райони', 'icon': 'M12 21s-6.75-5.6-6.75-11.25a6.75 6.75 0 1113.5 0C18.75 15.4 12 21 12 21zM12 12.25a2.5 2.5 0 100-5 2.5 2.5 0 000 5z'},
     {'name': 'market', 'title': 'Ринок', 'icon': 'M4.75 19.25V12.5M9.5 19.25V8.75M14.25 19.25V11M19 19.25V5.75'},
     {'name': 'affordability', 'title': 'Доступність', 'icon': 'M3.75 7.75h16.5v10.5H3.75zM3.75 11h16.5M7.5 15h3'},

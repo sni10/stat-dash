@@ -22,6 +22,11 @@ NOT_COLLECTED = ('Ці дані по місту ще не зібрані. Вон
 
 # Pages built from the other endpoints (dashboard/charts.py): filters shown and cards, in order
 PAGES = {
+    'cities': {
+        'title': 'Міста', 'filters': ('deal', 'cur', 'room'), 'rooms': (1, 2, 3),
+        'cards': (charts.cities_m2_dynamics, charts.cities_m2, charts.cities_price, charts.cities_yield,
+                  charts.cities_affordability, charts.cities_sale_rent, charts.cities_yield_dynamics),
+    },
     'districts': {
         'title': 'Райони', 'filters': ('deal', 'cur', 'room', 'repair', 'metric'), 'rooms': (1, 2, 3),
         'cards': (charts.flat_districts, charts.primary_districts, charts.parking_districts),
@@ -133,7 +138,7 @@ def rooms(request):
 
 @login_required
 def lun_page(request, page):
-    """Districts, Market, Affordability, New buildings, Houses: cards drawn from the entity tables."""
+    """Cities, Districts, Market, Affordability, New buildings, Houses: cards drawn from the entity tables."""
     conf = PAGES[page]
     try:
         filters = queries.parse_filters(request.GET)
@@ -156,7 +161,7 @@ def lun_page(request, page):
     # "no data" only once the source was asked: before the first collection of these endpoints say so
     collected = LunRaw.objects.filter(city=filters.city).exclude(endpoint__in=STAGE1_ENDPOINTS).exists()
     for spec in specs:
-        spec['wide'] = spec['type'] in ('line', 'area') or len(spec['categories']) > 8
+        spec.setdefault('wide', spec['type'] in ('line', 'area') or len(spec['categories']) > 8)
         if spec['empty'] and not collected:
             spec['empty'] = NOT_COLLECTED
     return render(request, 'dashboard/cards.html', _context(

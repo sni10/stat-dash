@@ -25,6 +25,8 @@ Login: `superme`, password: `superme`.
 - **Overview** — the median price per m², how it changed over a month and a year, the number of listings, and the
   whole history since 2023.
 - **By rooms** — prices of 1-, 2- and 3-room flats over time.
+- **Cities** — all 22 cities side by side: price per m² and per flat, rental yield, rent vs purchase price,
+  affordability, and the dynamics of the biggest markets.
 - **Districts** — prices by district, with or without renovation; new buildings and parking by district.
 - **Market** — how fast flats sell or rent, the most common prices, the asking price next to the real deal price.
 - **Affordability** — a flat's price in years of salary, the share of salary that goes to rent, by profession.

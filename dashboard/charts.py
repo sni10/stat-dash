@@ -6,7 +6,8 @@ Every builder takes the page context and returns a plain dict that charts.js dra
     {title, subtitle, type: line|area|bar|hbar|donut, unit, digits, series: [{name, data}], categories,
      labels, values, preliminary: [ISO dates], empty: str | None}
 
-line/area: data = [{x: ISO date, y}]; bar/hbar: data aligned with `categories`; donut: `labels` + `values`.
+line/area: data = [{x: ISO date, y}]; bar/hbar: data aligned with `categories` (optional `highlight`: the index of
+the bar to stand out); donut: `labels` + `values`; scatter: data = [{x, y, label}] with `x_title`, `y_title`.
 """
 from collections import defaultdict
 from collections.abc import Callable
@@ -58,14 +59,14 @@ def _f(value) -> float | None:
 
 
 def _spec(title, subtitle='', *, type='line', unit='', digits=0, series=(), categories=None, labels=None,
-          values=None, preliminary=(), empty=None, height=320):
+          values=None, preliminary=(), empty=None, height=320, **extra):
     has_data = any(any(v is not None for v in (p['y'] if isinstance(p, dict) else p for p in s['data']))
                    for s in series) if series else bool(values)
     return {
         'title': title, 'subtitle': subtitle, 'type': type, 'unit': unit, 'digits': digits,
         'series': list(series), 'categories': categories or [], 'labels': labels or [], 'values': values or [],
         'preliminary': sorted(set(preliminary)), 'empty': None if has_data else (empty or NO_DATA),
-        'height': height,
+        'height': height, **extra,
     }
 
 
@@ -373,6 +374,109 @@ def houses_districts(ctx: Ctx):
                  type='hbar', unit='$', categories=[r.district.name_uk for r in rows],
                  series=[{'name': 'Медіана', 'data': [_f(r.median_usd) for r in rows]}],
                  height=60 + 44 * max(len(rows), 1))
+
+
+# --- Cities: every city side by side, at the latest monthly point (the same date for all of them) -----------
+
+BIG_CITIES = ('kyiv', 'lviv', 'odesa', 'kharkiv', 'dnipro')
+
+
+def _monthly_latest(qs, field='snap_date') -> list:
+    return list(_latest(qs.filter(is_today=False), field).select_related('city'))
+
+
+def _compared(ctx) -> list[m.City]:
+    """The selected city and the five biggest markets, for the dynamics charts."""
+    cities = {c.slug: c for c in m.City.objects.filter(slug__in=BIG_CITIES)}
+    return [ctx.city] + [cities[s] for s in BIG_CITIES if s in cities and s != ctx.city.slug]
+
+
+def _ranking(ctx, values: dict, title, subtitle, *, unit, digits=0):
+    """values: {City: number}; bars sorted from the highest, the selected city highlighted."""
+    rows = sorted(((c, v) for c, v in values.items() if v is not None), key=lambda r: -r[1])
+    return _spec(title, subtitle, type='hbar', unit=unit, digits=digits, categories=[c.name for c, _ in rows],
+                 series=[{'name': title.split(':')[0], 'data': [round(v, 2) for _, v in rows]}],
+                 highlight=next((i for i, (c, _) in enumerate(rows) if c.pk == ctx.city.pk), None),
+                 height=60 + 28 * max(len(rows), 1), wide=False, empty='Немає даних.')
+
+
+def _flat_prices(ctx, contract_type, field):
+    rows = _monthly_latest(m.FlatPricePoint.objects.filter(contract_type=contract_type, room_count=ctx.room))
+    return {r.city: _f(getattr(r, field)) for r in rows}, rows
+
+
+def cities_m2(ctx: Ctx):
+    values, rows = _flat_prices(ctx, ctx.ct, f'median_m2_{ctx.cur}')
+    return _ranking(ctx, values, f'Ціна м²: {"оренда" if ctx.deal == "rent" else "продаж"}',
+                    f'Медіана{_when(rows)}, {ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol,
+                    digits=2 if ctx.deal == 'rent' and ctx.cur == 'usd' else 0)
+
+
+def cities_price(ctx: Ctx):
+    values, rows = _flat_prices(ctx, ctx.ct, f'median_{ctx.cur}')
+    return _ranking(ctx, values, f'Ціна квартири: {"оренда" if ctx.deal == "rent" else "продаж"}, {ROOM[ctx.room]}',
+                    f'Медіана{_when(rows)}, {ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol)
+
+
+def _yields(rows) -> dict:
+    """{(city, date): gross rental yield, %}: a year of the median rent over the median sale price."""
+    price = defaultdict(dict)
+    for r in rows:
+        price[(r.city, r.snap_date)][r.contract_type] = r.median_usd
+    return {key: float(p[2] * 12 / p[1] * 100) for key, p in price.items() if p.get(1) and p.get(2)}
+
+
+def cities_yield(ctx: Ctx):
+    rows = _monthly_latest(m.FlatPricePoint.objects.filter(room_count=ctx.room))
+    values = {city: v for (city, _), v in _yields(rows).items()}
+    return _ranking(ctx, values, f'Дохідність оренди: {ROOM[ctx.room]}',
+                    f'Річна оренда у % від ціни купівлі{_when(rows)}, до податків і простою.', unit='%', digits=1)
+
+
+def cities_sale_rent(ctx: Ctx):
+    sale, rows = _flat_prices(ctx, 1, f'median_{ctx.cur}')
+    rent, _ = _flat_prices(ctx, 2, f'median_{ctx.cur}')
+    points = {c: {'x': sale[c], 'y': rent[c], 'label': c.name} for c in sale if sale[c] and rent.get(c)}
+    series = [{'name': 'Міста', 'data': [p for c, p in points.items() if c.pk != ctx.city.pk]}]
+    if ctx.city in points:
+        series.append({'name': ctx.city.name, 'data': [points[ctx.city]]})
+    return _spec(f'Купівля проти оренди: {ROOM[ctx.room]}',
+                 f'Медіани{_when(rows)}, {ctx.cur.upper()}. Що вище точка, то дорожча оренда відносно ціни купівлі.',
+                 type='scatter', unit=ctx.symbol, series=series if points else [], x_title='Ціна купівлі',
+                 y_title='Оренда на місяць', height=460, wide=True, empty='Немає даних.')
+
+
+def cities_affordability(ctx: Ctx):
+    rows = _monthly_latest(m.AffordabilityPoint.objects.filter(contract_type=ctx.ct, room_count=ctx.room), 'date')
+    values = {r.city: _f(r.value) for r in rows}
+    if ctx.deal == 'rent':
+        return _ranking(ctx, values, f'Оренда у % зарплати: {ROOM[ctx.room]}',
+                        f'Медіанна оренда до медіанної зарплати міста{_when(rows, "date")}.', unit='%')
+    return _ranking(ctx, values, f'Ціна квартири в роках зарплати: {ROOM[ctx.room]}',
+                    f'Скільки років відкладати всю медіанну зарплату{_when(rows, "date")}.', unit='р.', digits=1)
+
+
+def cities_m2_dynamics(ctx: Ctx):
+    cities = _compared(ctx)
+    rows = m.FlatPricePoint.objects.filter(city__in=cities, contract_type=ctx.ct, room_count=1).select_related('city')
+    series, today = _lines(rows, lambda r: r.city, lambda r: r.snap_date, lambda r: getattr(r, f'median_m2_{ctx.cur}'),
+                           name=lambda c: c.name, order=cities)
+    return _spec(f'Ціна м² у динаміці: {"оренда" if ctx.deal == "rent" else "продаж"}',
+                 f'Вибране місто і п’ять найбільших ринків, медіана, {ctx.cur.upper()}{ctx.per_month}.',
+                 unit=ctx.symbol, digits=2 if ctx.deal == 'rent' and ctx.cur == 'usd' else 0, series=series,
+                 preliminary=today, height=380)
+
+
+def cities_yield_dynamics(ctx: Ctx):
+    cities = _compared(ctx)
+    rows = (m.FlatPricePoint.objects.filter(city__in=cities, room_count=ctx.room, is_today=False)
+            .select_related('city'))
+    by_city = defaultdict(list)
+    for (city, date), value in _yields(rows).items():
+        by_city[city].append({'x': date.isoformat(), 'y': round(value, 2)})
+    series = [{'name': c.name, 'data': sorted(by_city[c], key=lambda p: p['x'])} for c in cities if by_city[c]]
+    return _spec(f'Дохідність оренди в динаміці: {ROOM[ctx.room]}', 'Річна оренда у % від ціни купівлі, щомісяця.',
+                 unit='%', digits=1, series=series, height=380)
 
 
 Builder = Callable[[Ctx], dict]

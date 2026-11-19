@@ -102,10 +102,20 @@
 
   document.querySelectorAll('.chart[data-endpoint]').forEach(load);
 
-  // --- Specs embedded in the page (dashboard/charts.py): line | area | bar | hbar | donut ---------------------
+  // --- Specs embedded in the page (dashboard/charts.py): line | area | bar | hbar | donut | scatter ----------
 
   const PALETTE = ['#465FFF', '#12B76A', '#F79009', '#7A5AF8', '#EE46BC', '#0BA5EC', '#F04438', '#667085',
     '#9CB9FF', '#6CE9A6', '#FEC84B', '#BDB4FE'];
+
+  // round ticks (10 000, 20 000 ...) instead of the min..max split into equal odd parts
+  function niceAxis(values) {
+    if (!values.length) return {};
+    const lo = Math.min(...values), hi = Math.max(...values);
+    const raw = (hi - lo || hi || 1) / 6, mag = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 2.5, 5, 10].find((k) => k * mag >= raw) * mag;
+    const min = Math.floor(lo / step) * step, max = Math.ceil(hi / step) * step;
+    return { min, max, tickAmount: Math.round((max - min) / step) };
+  }
 
   function specOptions(el, spec) {
     const value = (v) => (v == null ? '—' : `${number(v, spec.digits)} ${spec.unit}`.trim());
@@ -125,14 +135,39 @@
         dataLabels: { enabled: true, formatter: (v) => `${number(v, 0)}%` },
         plotOptions: { pie: { donut: { size: '62%' } } } };
     }
+    if (spec.type === 'scatter') {
+      const escape = (text) => String(text).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+      const title = (text) => ({ text, style: { color: axisText(), fontFamily: FONT, fontWeight: 400 } });
+      return { ...base, chart: { ...base.chart, type: 'scatter' }, colors: [PALETTE[0], PALETTE[2]],
+        series: spec.series,
+        markers: { size: 7, strokeWidth: 0, hover: { size: 9 } },
+        dataLabels: { enabled: true, offsetY: -9, style: { fontSize: '11px', fontWeight: 400, colors: [axisText()] },
+          background: { enabled: false },
+          formatter: (v, { seriesIndex, dataPointIndex, w }) => w.config.series[seriesIndex].data[dataPointIndex].label },
+        xaxis: { type: 'numeric', ...niceAxis(spec.series.flatMap((s) => s.data.map((p) => p.x))),
+          title: title(spec.x_title), axisBorder: { show: false },
+          labels: { formatter: (v) => number(v, 0), style: { colors: axisText() } } },
+        yaxis: { title: title(spec.y_title), labels: { formatter: (v) => number(v, 0), style: { colors: axisText() } } },
+        grid: { ...base.grid, xaxis: { lines: { show: true } }, yaxis: { lines: { show: true } } },
+        tooltip: { theme: base.tooltip.theme, custom: ({ seriesIndex, dataPointIndex, w }) => {
+          const p = w.config.series[seriesIndex].data[dataPointIndex];
+          return `<div class="px-3 py-2 text-sm"><b>${escape(p.label)}</b><br>${escape(spec.x_title)}: ${value(p.x)}`
+            + `<br>${escape(spec.y_title)}: ${value(p.y)}</div>`;
+        } } };
+    }
     if (spec.type === 'bar' || spec.type === 'hbar') {
       const horizontal = spec.type === 'hbar';
       const axis = { labels: { style: { colors: axisText() } } };
-      return { ...base, chart: { ...base.chart, type: 'bar' },
+      // one bar stands out (the selected city): every bar its own colour
+      const highlight = spec.highlight != null && spec.series.length === 1;
+      const colors = highlight
+        ? spec.categories.map((_, i) => (i === spec.highlight ? PALETTE[2] : PALETTE[0])) : PALETTE;
+      return { ...base, chart: { ...base.chart, type: 'bar' }, colors,
+        legend: highlight ? { show: false } : base.legend,
         series: spec.series, xaxis: { categories: spec.categories, axisBorder: { show: false }, axisTicks: { show: false },
           labels: { ...axis.labels, ...(horizontal ? { formatter: (v) => number(Number(v), 0) } : { rotate: -45, trim: true }) } },
         yaxis: { labels: { ...axis.labels, maxWidth: 220, ...(horizontal ? {} : { formatter: (v) => number(v, spec.digits) }) } },
-        plotOptions: { bar: { horizontal, borderRadius: 4, columnWidth: '60%', barHeight: '70%' } },
+        plotOptions: { bar: { horizontal, distributed: highlight, borderRadius: 4, columnWidth: '60%', barHeight: '70%' } },
         tooltip: { ...base.tooltip, shared: true, intersect: false },
         grid: { ...base.grid, xaxis: { lines: { show: horizontal } }, yaxis: { lines: { show: !horizontal } } } };
     }

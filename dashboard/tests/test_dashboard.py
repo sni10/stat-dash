@@ -310,6 +310,59 @@ class ChartBuilderTests(TestCase):
                 self.assertTrue(build(lviv)['empty'])
 
 
+class CitiesTests(TestCase):
+    """The Cities page: Odesa from the synthetic answers (latest monthly point 2025-12-24: m² 1011 $, rent m² 19 $),
+    Kyiv added by hand on the same date."""
+
+    def setUp(self):
+        load()
+        self.odesa, self.kyiv = City.objects.get(slug='odesa'), City.objects.get(slug='kyiv')
+        day = dt.date(2025, 12, 24)
+        FlatPricePoint.objects.bulk_create([
+            FlatPricePoint(snap_date=day, city=self.kyiv, contract_type=1, room_count=1, median_usd=90000,
+                           median_m2_usd=2000, median_uah=90000 * 40, median_m2_uah=2000 * 40),
+            FlatPricePoint(snap_date=day, city=self.kyiv, contract_type=2, room_count=1, median_usd=600,
+                           median_m2_usd=15, median_uah=600 * 40, median_m2_uah=15 * 40),
+        ])
+
+    def ctx(self, **kw):
+        return charts.Ctx(self.odesa, **kw)
+
+    def test_rankings_sorted_with_the_selected_city_highlighted(self):
+        spec = charts.cities_m2(self.ctx())
+        self.assertEqual((spec['type'], spec['categories']), ('hbar', ['Київ', 'Одеса']))
+        self.assertEqual(spec['series'][0]['data'], [2000.0, 1011.0])  # the monthly point, not "today"
+        self.assertEqual(spec['highlight'], 1)
+        self.assertIn('24.12.2025', spec['subtitle'])
+        rent = charts.cities_price(self.ctx(deal='rent'))
+        self.assertEqual(rent['series'][0]['data'], [19.0 * 45, 600.0])
+
+    def test_rental_yield(self):
+        spec = charts.cities_yield(self.ctx())
+        self.assertEqual(spec['categories'], ['Одеса', 'Київ'])
+        self.assertEqual(spec['series'][0]['data'], [round(19 * 45 * 12 / (1011 * 45) * 100, 2), 8.0])
+        dynamics = charts.cities_yield_dynamics(self.ctx())
+        self.assertEqual([s['name'] for s in dynamics['series']], ['Одеса', 'Київ'])
+        self.assertEqual(len(dynamics['series'][0]['data']), 12)  # monthly points of 2025, "today" left out
+        self.assertEqual(dynamics['series'][1]['data'], [{'x': '2025-12-24', 'y': 8.0}])
+
+    def test_sale_vs_rent_scatter(self):
+        spec = charts.cities_sale_rent(self.ctx(cur='uah'))
+        self.assertEqual(spec['type'], 'scatter')
+        self.assertEqual(spec['series'][0]['data'], [{'x': 90000.0 * 40, 'y': 600.0 * 40, 'label': 'Київ'}])
+        self.assertEqual(spec['series'][1]['name'], 'Одеса')  # the selected city: a series of its own
+
+    def test_m2_dynamics_selected_city_first(self):
+        spec = charts.cities_m2_dynamics(charts.Ctx(self.kyiv))
+        self.assertEqual([s['name'] for s in spec['series']], ['Київ', 'Одеса'])
+        self.assertEqual(spec['preliminary'], ['2026-01-10'])
+
+    def test_affordability(self):
+        spec = charts.cities_affordability(self.ctx())
+        self.assertEqual((spec['unit'], spec['series'][0]['data']), ('р.', [7.0]))
+        self.assertEqual(charts.cities_affordability(self.ctx(deal='rent'))['series'][0]['data'], [40.0])
+
+
 class LunPagesTests(LoggedInTestCase):
     def test_every_page_renders_its_cards(self):
         load()
