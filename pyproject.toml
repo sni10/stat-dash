@@ -1,7 +1,7 @@
 [project]
 name = "stat-dash"
 version = "0.1.0"
-description = "Personal dashboard of housing prices on LUN Statistics data: weekly collection into Postgres"
+description = "Dashboard of housing prices in Ukraine: weekly collection into Postgres, entity tables, charts"
 requires-python = ">=3.14"
 dependencies = [
     "django>=6.1",

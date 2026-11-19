@@ -14,8 +14,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/tailwind_css-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![TailAdmin](https://img.shields.io/badge/ui-TailAdmin-465FFF)](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template)
 
-Housing prices in Ukraine at a glance: 22 cities, sale and rent, updated every week from
-[LUN Statistics](https://lun.ua/stat).
+Housing prices in Ukraine at a glance: 22 cities, sale and rent, updated every week.
 
 **Demo:** [https://185-25-117-74.sslip.io](https://185-25-117-74.sslip.io) (sign-in required)
 
@@ -37,7 +36,7 @@ Pick a city, sale or rent, and USD or UAH. The interface is in Ukrainian, with a
 
 ## Where the numbers come from
 
-Everything comes from LUN Statistics and is refreshed once a week, on Monday night. These are prices of **listings**,
+The data comes from a public real-estate statistics service and is refreshed once a week, on Monday night. These are prices of **listings**,
 not of completed deals (except the realtors' deal prices on the Market page). The project is personal and
 non-commercial; no collected data is published in this repository.
 
@@ -63,7 +62,7 @@ DEPLOY_SERVER=deploy@<server> bash deploy/deploy.sh <commit sha>       # deploy 
 docker compose exec web python manage.py reparse_lun                   # rebuild the tables from the raw archive
 ```
 
-Every LUN answer is archived raw and parsed into one table per entity: see [docs/data-model.md](docs/data-model.md).
+Every answer of the source is archived raw and parsed into one table per entity: see [docs/data-model.md](docs/data-model.md).
 
 Every push to `main` is tested, released (version tag + GitHub Release) and built into a Docker image automatically.
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). UI theme:

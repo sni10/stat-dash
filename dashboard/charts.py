@@ -50,7 +50,7 @@ class Ctx:
 
 
 def _f(value) -> float | None:
-    """Decimal -> float for the JSON spec; 0 is a gap (LUN sends it for months without data, spring 2022)."""
+    """Decimal -> float for the JSON spec; 0 is a gap (the source sends it for months without data, spring 2022)."""
     if value is None:
         return None
     value = float(value) if isinstance(value, Decimal) else value
@@ -170,11 +170,11 @@ def price_distribution(ctx: Ctx):
     currency, note = ctx.cur, ''
     if not rows:  # sale is published in USD only
         rows = list(_latest(base.filter(currency='usd')))
-        currency, note = 'usd', ' ЛУН публікує продаж лише в USD.' if rows else ''
+        currency, note = 'usd', ' Продаж доступний лише в USD.' if rows else ''
     rows.sort(key=lambda r: r.price_from)
     buckets = [(r.price_from, r.price_to) for r in rows]
     counts = [r.cnt for r in rows]
-    # LUN sends ~80 narrow buckets with a long, almost empty tail: keep the ones holding 97% of the listings and
+    # the source sends ~80 narrow buckets with a long, almost empty tail: keep the ones holding 97% of the listings and
     # fold the rest into one "from X" bucket
     grand, running, cut = sum(counts), 0, len(buckets)
     for i, count in enumerate(counts):
@@ -250,7 +250,7 @@ def pets_rent(ctx: Ctx):
         'Оренда з домашніми тваринами', 'Частка оголошень квартир.', type='donut', unit='%', digits=1,
         labels=['Можна', 'За домовленістю', 'Не можна', 'Не вказано'],
         values=[row.allowed, row.by_agreement, row.forbidden, row.unknown] if row else [],
-        empty='ЛУН публікує це лише для Києва та Львова.',
+        empty='Дані є лише для Києва та Львова.',
     )
 
 
@@ -369,7 +369,7 @@ def houses_districts(ctx: Ctx):
     rows = list(_latest(m.HouseDistrictPrice.objects.filter(district__city=ctx.city, contract_type=ctx.ct))
                 .select_related('district'))
     rows.sort(key=lambda r: -(r.median_usd or 0))
-    return _spec('Будинки: медіанна ціна за районами', f'USD{_when(rows)}. ЛУН публікує лише продаж у USD.',
+    return _spec('Будинки: медіанна ціна за районами', f'USD{_when(rows)}. Доступний лише продаж у USD.',
                  type='hbar', unit='$', categories=[r.district.name_uk for r in rows],
                  series=[{'name': 'Медіана', 'data': [_f(r.median_usd) for r in rows]}],
                  height=60 + 44 * max(len(rows), 1))

@@ -2,7 +2,7 @@ from django.utils import timezone
 
 from .queries import collection_status
 
-# Sidebar entries of the LUN pages (views.PAGES), with simple line icons (24x24 path data)
+# Sidebar entries of the extra pages (views.PAGES), with simple line icons (24x24 path data)
 NAV_PAGES = [
     {'name': 'districts', 'title': 'Райони', 'icon': 'M12 21s-6.75-5.6-6.75-11.25a6.75 6.75 0 1113.5 0C18.75 15.4 12 21 12 21zM12 12.25a2.5 2.5 0 100-5 2.5 2.5 0 000 5z'},
     {'name': 'market', 'title': 'Ринок', 'icon': 'M4.75 19.25V12.5M9.5 19.25V8.75M14.25 19.25V11M19 19.25V5.75'},

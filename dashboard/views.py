@@ -20,7 +20,7 @@ STAGE1_ENDPOINTS = ('flat-price-history', 'price')  # collected since stage 1; t
 NOT_COLLECTED = ('Ці дані по місту ще не зібрані. Вони з’являться після найближчого збору '
                  '(понеділок 04:17) або після ручного запуску collect_lun.')
 
-# Pages built from LUN's other endpoints (dashboard/charts.py): filters shown and cards, in order
+# Pages built from the other endpoints (dashboard/charts.py): filters shown and cards, in order
 PAGES = {
     'districts': {
         'title': 'Райони', 'filters': ('deal', 'cur', 'room', 'repair', 'metric'), 'rooms': (1, 2, 3),
@@ -133,7 +133,7 @@ def rooms(request):
 
 @login_required
 def lun_page(request, page):
-    """Districts, Market, Affordability, New buildings, Houses: cards drawn from LUN's latest answers."""
+    """Districts, Market, Affordability, New buildings, Houses: cards drawn from the entity tables."""
     conf = PAGES[page]
     try:
         filters = queries.parse_filters(request.GET)
@@ -153,7 +153,7 @@ def lun_page(request, page):
     if 'metric' in conf['filters']:
         groups.append(_group('metric', 'Показник', METRICS, metric))
     specs = [build(ctx) for build in conf['cards']]
-    # "LUN does not publish it" only when LUN was asked: before the first collection of these endpoints say so
+    # "no data" only once the source was asked: before the first collection of these endpoints say so
     collected = LunRaw.objects.filter(city=filters.city).exclude(endpoint__in=STAGE1_ENDPOINTS).exists()
     for spec in specs:
         spec['wide'] = spec['type'] in ('line', 'area') or len(spec['categories']) > 8

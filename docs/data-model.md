@@ -1,20 +1,20 @@
 # Data model
 
-`lun_raw` is the archive and the source of truth: every LUN answer, kept when its data changed. A parser per endpoint
+`lun_raw` is the archive and the source of truth: every answer of the source, kept when its data changed. A parser per endpoint
 (`collector/parsers.py`) turns an answer into rows of the tables below with an idempotent upsert on the natural key.
 `manage.py reparse_lun` replays the archive (oldest first) and rebuilds the tables.
 
 Two kinds of endpoints:
 
-- **Series** — LUN sends the history (monthly points, the 24th or the 1st) plus a floating "today" point
+- **Series** — the source sends the history (monthly points, the 24th or the 1st) plus a floating "today" point
   (`is_today`). The previous "today" rows of the same series are replaced on every collection; when "today" falls on a
   monthly date, the monthly point wins.
-- **Snapshots** — LUN sends only the current state. The key holds `snap_date` (the date in the answer, or the
+- **Snapshots** — the source sends only the current state. The key holds `snap_date` (the date in the answer, or the
   collection date when the answer has none): a new date adds a snapshot, the same date overwrites it. History builds up
   week by week on our side.
 
 Conventions: `room_count = 0` means all room counts; `scope` is `city` or `region` (the oblast); UAH and USD are both
-kept when LUN sends them; 4+ room flats are stored (the dashboard does not show them).
+kept when the source sends them; 4+ room flats are stored (the dashboard does not show them).
 
 ## Dimension
 
@@ -22,7 +22,7 @@ kept when LUN sends them; 4+ room flats are stored (the dashboard does not show 
 |---|---|---|
 | `district` | city, kind (`district` / `settlement` / `microdistrict`), lun_id | name_uk, name_en |
 
-LUN numbers districts per city and uses the same ids in every endpoint (Odesa 11–14, Lviv 48–52, Kyiv 1–10). Kyiv's
+The source numbers districts per city and uses the same ids in every endpoint (Odesa 11–14, Lviv 48–52, Kyiv 1–10). Kyiv's
 new-building answer adds suburbs (`isCity`) whose ids collide with district ids, hence `kind`. Ivano-Frankivsk sends
 micro-districts with ids ≥ 10 000 000.
 
@@ -37,7 +37,7 @@ micro-districts with ids ≥ 10 000 000.
 | `affordability_point` | salary-history | city, contract type, rooms, date | value (sale: years of salary, rent: % of salary), price, salary, cnt, is_today |
 | `rent_payback_point` | sale-in-rent-history | city, rooms, date | years of rent, is_today |
 | `primary_class_price` | price | city, scope, class (economy…premium, all), month | average m² price UAH/USD, cnt, is_today |
-| `housing_commissioning` | dssu | region (LUN id of the oblast centre; 10000 = Ukraine), year, quarter (0 = the year's total) | all housing m², apartment buildings m² |
+| `housing_commissioning` | dssu | region (id of the oblast centre; 10000 = Ukraine), year, quarter (0 = the year's total) | all housing m², apartment buildings m² |
 
 ## Snapshots
 

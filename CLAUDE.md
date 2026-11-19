@@ -1,12 +1,13 @@
 # Project instructions
 
-Personal dashboard of housing prices on LUN Statistics data (lun.ua/stat): weekly collection into Postgres, then
-charts in a TailAdmin-based UI. Spec: `ТЗ Дашборд рынка недвижимости на данных ЛУН Статистики.md` (local, not in git).
+Dashboard of housing prices in Ukraine (a portfolio project): weekly collection from a public real-estate statistics
+API into Postgres, then charts in a TailAdmin-based UI. The spec is a local file, not in git.
+Do not name the data source in user-facing text (UI, README, docs): it is a portfolio project.
 Stack and CI mirror `agregator-backend`.
 
 - Stage 1 (done): `collector` app — `collect_lun`, `scheduler` container (supercronic, `deploy/crontab`).
 - Stage 2 (done): `dashboard` app — Overview and By rooms pages, `/api/prices`, `/api/monthly`, Django login.
-- Data model (`docs/data-model.md`): every LUN answer is archived in `lun_raw`; `collector/parsers.py` parses it into
+- Data model (`docs/data-model.md`): every answer of the source is archived in `lun_raw`; `collector/parsers.py` parses it into
   one table per entity (series with history + a floating "today" point, snapshots keyed by `snap_date`).
   `manage.py reparse_lun` rebuilds the tables from the archive: run it after changing a parser.
 - Extra pages (`dashboard/charts.py`, `views.PAGES`) read those tables. 4+ rooms are not shown anywhere.
@@ -14,10 +15,10 @@ Stack and CI mirror `agregator-backend`.
 
 UI: TailAdmin free (Tailwind v4) theme in `frontend/src/tailadmin.css`. After changing templates or
 `dashboard/static/dashboard/js`, run `npm ci && npm run build` in `frontend/` and commit `dashboard/static`
-(CI fails on a stale build). LUN's m² median is per city: equal for every room count.
+(CI fails on a stale build). The source's m² median is per city: equal for every room count.
 
 Run locally: `docker compose up -d --build`; tests: `uv run python manage.py test` (needs the `db` service,
-127.0.0.1:5435). Real LUN data never goes into the repo: test payloads are synthetic (`collector/tests/factories.py`).
+127.0.0.1:5435). Real collected data never goes into the repo: test payloads are synthetic (`collector/tests/factories.py`).
 
 ## Commit messages: Conventional Commits, always
 
