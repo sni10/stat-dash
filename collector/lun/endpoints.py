@@ -1,7 +1,7 @@
 """Every LUN endpoint we collect, as found on lun.ua/stat/{sale,rent,primary}/<city> (19.11.2026).
 
-Raw answers go to lun_raw (deduplicated by hash); the dashboard reads the latest one. Only flat-price-history is
-also normalized (lun_price_snapshot), because the overview and the monthly aggregate are computed from it.
+Raw answers go to lun_raw (deduplicated by hash), the archive; collector/parsers.py turns every answer into rows of
+the entity tables (docs/data-model.md), which the dashboard reads.
 """
 from dataclasses import dataclass
 

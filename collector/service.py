@@ -1,4 +1,4 @@
-"""Weekly collection (spec, "Сбор данных"): fetch -> lun_raw -> validate -> lun_price_snapshot -> collect_run."""
+"""Weekly collection (spec, "Сбор данных"): fetch -> lun_raw -> validate -> entity tables -> collect_run."""
 import datetime as dt
 import logging
 import random
@@ -11,6 +11,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 from pydantic import ValidationError
 
+from . import parsers
 from .alerts import send_alert
 from .lun.client import LunBlocked, LunClient, LunError, LunNotFound
 from .lun.hashing import payload_hash
@@ -73,11 +74,11 @@ _SNAPSHOT_COLUMNS = (
 )
 _VALUE_COLUMNS = ('median_uah', 'median_usd', 'median_m2_uah', 'median_m2_usd', 'cnt', 'is_today')
 _UPSERT_SQL = (
-    f'INSERT INTO lun_price_snapshot ({", ".join(_SNAPSHOT_COLUMNS)}) VALUES {{values}} '
+    f'INSERT INTO flat_price_point ({", ".join(_SNAPSHOT_COLUMNS)}) VALUES {{values}} '
     'ON CONFLICT (snap_date, city_id, contract_type, room_count) DO UPDATE SET '
     + ', '.join(f'{c} = EXCLUDED.{c}' for c in (*_VALUE_COLUMNS, 'updated_at'))
     # untouched points are not rewritten: the row count is the real delta
-    + f' WHERE ({", ".join(f"lun_price_snapshot.{c}" for c in _VALUE_COLUMNS)})'
+    + f' WHERE ({", ".join(f"flat_price_point.{c}" for c in _VALUE_COLUMNS)})'
     f' IS DISTINCT FROM ({", ".join(f"EXCLUDED.{c}" for c in _VALUE_COLUMNS)})'
 )
 
@@ -101,7 +102,7 @@ def upsert_price_history(city_id: int, contract_type: int, points: list[FlatPric
     placeholders = ', '.join(['(' + ', '.join(['%s'] * len(_SNAPSHOT_COLUMNS)) + ')'] * len(rows))
     with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute(
-            'DELETE FROM lun_price_snapshot WHERE city_id = %s AND contract_type = %s AND is_today',
+            'DELETE FROM flat_price_point WHERE city_id = %s AND contract_type = %s AND is_today',
             [city_id, contract_type],
         )
         if not rows:
@@ -110,16 +111,17 @@ def upsert_price_history(city_id: int, contract_type: int, points: list[FlatPric
         return cursor.rowcount
 
 
-def store_parsed(job: Job, payload: dict) -> int:
-    """Validate the payload (all endpoints) and write the normalized rows (flat-price-history only).
-    Raises ValidationError / SchemaMismatch."""
+def store_parsed(job: Job, payload: dict, fetched_at: dt.datetime | None = None) -> int:
+    """Validate the payload and write its rows into the entity tables (docs/data-model.md). Returns the rows written.
+    Raises ValidationError / SchemaMismatch. fetched_at dates the snapshots that carry no date of their own."""
     response = ENDPOINTS[job.endpoint].schema.model_validate(payload)
     if job.city is not None and isinstance(response.data, list):
         foreign = [p for p in response.data if getattr(p, 'cityId', job.city.id) != job.city.id]
         if foreign:
             raise SchemaMismatch(f'{len(foreign)} records of another city')
     if job.endpoint != FLAT_PRICE_HISTORY:
-        return 0
+        ctx = parsers.Context(job.city, job.params.get('contractTypeId'), fetched_at or timezone.now())
+        return parsers.parse(job.endpoint, response.data, ctx)
     contract_type = job.params['contractTypeId']
     if any(p.contractType != contract_type for p in response.data):
         raise SchemaMismatch('points of another contract type')

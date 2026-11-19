@@ -1,4 +1,4 @@
-"""Read side of the dashboard: filters from query params, series and KPIs from lun_price_snapshot / v_price_monthly.
+"""Read side of the dashboard: filters from query params, series and KPIs from flat_price_point / v_price_monthly.
 
 LUN's median price per m² is one number per city and date: it is the same for every room count (checked on the
 whole Odesa history). So m² series are per city; only the object price differs by room count.
@@ -13,7 +13,7 @@ from django.contrib.postgres.aggregates import BoolOr
 from django.db import connection
 from django.db.models import Max, Sum
 
-from collector.models import City, CollectRun, ContractType, LunPriceSnapshot
+from collector.models import City, CollectRun, ContractType, FlatPricePoint
 
 DEALS = {'sale': ContractType.SALE, 'rent': ContractType.RENT}
 CURRENCIES = ('usd', 'uah')
@@ -92,7 +92,7 @@ def parse_filters(params: Mapping[str, str]) -> Filters:
 
 
 def _snapshots(f: Filters):
-    qs = LunPriceSnapshot.objects.filter(city=f.city, contract_type=f.contract_type)
+    qs = FlatPricePoint.objects.filter(city=f.city, contract_type=f.contract_type)
     if f.date_from:
         qs = qs.filter(snap_date__gte=f.date_from)
     if f.date_to:

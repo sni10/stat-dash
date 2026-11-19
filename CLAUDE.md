@@ -6,8 +6,10 @@ Stack and CI mirror `agregator-backend`.
 
 - Stage 1 (done): `collector` app — `collect_lun`, `scheduler` container (supercronic, `deploy/crontab`).
 - Stage 2 (done): `dashboard` app — Overview and By rooms pages, `/api/prices`, `/api/monthly`, Django login.
-- Extra pages (`dashboard/charts.py`, `views.PAGES`): every endpoint of `collector/lun/endpoints.py` is archived
-  raw and validated; the pages draw LUN's latest answer. 4+ rooms are not shown anywhere in the dashboard.
+- Data model (`docs/data-model.md`): every LUN answer is archived in `lun_raw`; `collector/parsers.py` parses it into
+  one table per entity (series with history + a floating "today" point, snapshots keyed by `snap_date`).
+  `manage.py reparse_lun` rebuilds the tables from the archive: run it after changing a parser.
+- Extra pages (`dashboard/charts.py`, `views.PAGES`) read those tables. 4+ rooms are not shown anywhere.
 - Stage 3: table/CSV, collection status page, anomaly and stale-run alerts.
 
 UI: TailAdmin free (Tailwind v4) theme in `frontend/src/tailadmin.css`. After changing templates or

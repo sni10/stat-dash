@@ -1,4 +1,5 @@
-"""Chart specs for the extra pages (Districts, Market, Affordability, New buildings, Houses).
+"""Chart specs for the extra pages (Districts, Market, Affordability, New buildings, Houses), read from the entity
+tables (docs/data-model.md). Snapshot tables are shown at their latest snap_date.
 
 Every builder takes the page context and returns a plain dict that charts.js draws:
 
@@ -10,21 +11,25 @@ line/area: data = [{x: ISO date, y}]; bar/hbar: data aligned with `categories`; 
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 
-from collector.models import City
+from django.db.models import Max, QuerySet
 
-from .lun_data import latest
+from collector import models as m
 
 SYMBOL = {'usd': '$', 'uah': '₴'}
-ROOM = {None: 'Усі', 1: '1 кімн.', 2: '2 кімн.', 3: '3 кімн.'}  # 4+ rooms are not shown
+ROOM = {0: 'Усі', 1: '1 кімн.', 2: '2 кімн.', 3: '3 кімн.'}  # 0 = all room counts; 4+ rooms are not shown
+SHOWN_ROOMS = tuple(ROOM)
 DEAL_IDS = {'sale': 1, 'rent': 2}
 NO_DATA = 'Відсутні дані для вибраного міста.'
 MAX_DISTRICTS = 20  # some cities have ~150 micro-districts
+CLASS_NAMES = {'economy': 'Економ', 'comfort': 'Комфорт', 'business': 'Бізнес', 'premium': 'Преміум',
+               'all': 'Середня по місту'}
 
 
 @dataclass(frozen=True)
 class Ctx:
-    city: City
+    city: m.City
     deal: str = 'sale'
     cur: str = 'usd'
     room: int = 1
@@ -44,9 +49,18 @@ class Ctx:
         return ' на місяць' if self.deal == 'rent' else ''
 
 
+def _f(value) -> float | None:
+    """Decimal -> float for the JSON spec; 0 is a gap (LUN sends it for months without data, spring 2022)."""
+    if value is None:
+        return None
+    value = float(value) if isinstance(value, Decimal) else value
+    return value or None
+
+
 def _spec(title, subtitle='', *, type='line', unit='', digits=0, series=(), categories=None, labels=None,
           values=None, preliminary=(), empty=None, height=320):
-    has_data = any(s['data'] for s in series) if series else bool(values)
+    has_data = any(any(v is not None for v in (p['y'] if isinstance(p, dict) else p for p in s['data']))
+                   for s in series) if series else bool(values)
     return {
         'title': title, 'subtitle': subtitle, 'type': type, 'unit': unit, 'digits': digits,
         'series': list(series), 'categories': categories or [], 'labels': labels or [], 'values': values or [],
@@ -55,184 +69,164 @@ def _spec(title, subtitle='', *, type='line', unit='', digits=0, series=(), cate
     }
 
 
-def _line(points):
-    # 0 never is a real price, term or share here: LUN sends it for months without data (spring 2022) -> a gap
-    return [{'x': p.x.isoformat(), 'y': p.y or None} for p in sorted(points, key=lambda p: p.x)]
-
-
-@dataclass(frozen=True)
-class _P:
-    x: object
-    y: float | None
-
-
-def _series_by(items, group, x, y, name=lambda g: str(g), order=None):
-    """Line series, one per group value, sorted by x."""
+def _lines(rows, group, x, y, name=lambda g: str(g), order=None):
+    """Line series, one per group value, sorted by x; also the ISO dates of the preliminary ("today") points."""
     groups = defaultdict(list)
-    for item in items:
-        groups[group(item)].append(_P(x(item), y(item)))
-    keys = order if order is not None else sorted(groups, key=lambda g: (g is not None, g))
-    return [{'name': name(g), 'data': _line(groups[g])} for g in keys if g in groups]
+    today = []
+    for row in rows:
+        groups[group(row)].append((x(row), _f(y(row))))
+        if getattr(row, 'is_today', False):
+            today.append(x(row).isoformat())
+    keys = order if order is not None else sorted(groups)
+    series = [{'name': name(g), 'data': [{'x': d.isoformat(), 'y': v} for d, v in sorted(groups[g])]}
+              for g in keys if g in groups]
+    return series, today
 
 
-def _today(items, x, flag='isToday'):
-    return [x(i).isoformat() for i in items if getattr(i, flag, False)]
+def _latest(qs: QuerySet, field='snap_date') -> QuerySet:
+    """A snapshot table at its newest date (for the filters already applied)."""
+    newest = qs.aggregate(newest=Max(field))['newest']
+    return qs.filter(**{field: newest}) if newest else qs.none()
 
 
 def _usd_uah(ctx, usd, uah):
     return usd if ctx.cur == 'usd' else uah
 
 
+def _when(rows, field='snap_date'):
+    return f' на {getattr(rows[0], field):%d.%m.%Y}' if rows else ''
+
+
 # --- Districts --------------------------------------------------------------------------------------------
 
 def flat_districts(ctx: Ctx):
-    data = latest('market-districts', ctx.city) or []
-    rows = [r for r in data if r.contractTypeId == ctx.ct and r.roomCount == ctx.room]
-    suffix = {'all': '', 'renovated': 'Renovated', 'not': 'NotRenovated'}[ctx.repair]
+    rows = list(_latest(m.DistrictPrice.objects.filter(
+        district__city=ctx.city, contract_type=ctx.ct, room_count=ctx.room)).select_related('district'))
+    split = {'all': '', 'renovated': '_renovated', 'not': '_not_renovated'}[ctx.repair]
 
     def value(r):
-        """UAH field, converted with usdToUah; the short shape (no splits, no rate) has USD fields of its own."""
-        if ctx.metric == 'price':
-            uah, usd = getattr(r, 'median' + suffix), r.medianUsd if not suffix else None
-        else:
-            uah = getattr(r, 'medianM2Total' + suffix) if suffix or r.medianM2Total is not None else r.medianM2
-            usd = r.medianM2Usd if not suffix and r.medianM2Total is None else None
+        """UAH median, converted with the rate; the short shape (micro-districts, no rate) has USD of its own."""
+        uah = getattr(r, ('median' if ctx.metric == 'price' else 'median_m2') + split + '_uah')
         if ctx.cur == 'uah':
-            return uah
-        if uah is not None and r.usdToUah:
-            return uah / r.usdToUah
-        return usd
+            return _f(uah)
+        if uah is not None and r.usd_to_uah:
+            return _f(uah / r.usd_to_uah)
+        return _f(None if split else (r.median_usd if ctx.metric == 'price' else r.median_m2_usd))
 
-    rows = [r for r in rows if value(r) is not None]
-    rows.sort(key=lambda r: -value(r))
+    rows = sorted((r for r in rows if value(r) is not None), key=lambda r: -value(r))
     shown = rows[:MAX_DISTRICTS]
-    values = [value(r) for r in shown]
     what = 'ціна квартири' if ctx.metric == 'price' else 'ціна м²'
     repair = {'all': '', 'renovated': ', з ремонтом', 'not': ', без ремонту'}[ctx.repair]
-    when = f' на {rows[0].date:%d.%m.%Y}' if rows else ''
     top = f' {MAX_DISTRICTS} найдорожчих із {len(rows)}.' if len(rows) > MAX_DISTRICTS else ''
     return _spec(
         f'{"Оренда" if ctx.deal == "rent" else "Вторинка"}: медіанна {what}, {ROOM[ctx.room]}{repair}',
-        f'За районами{when}. {ctx.cur.upper()}{ctx.per_month}.{top}',
-        type='hbar', unit=ctx.symbol, categories=[r.districtName or str(r.districtId) for r in shown],
-        series=[{'name': 'Медіана', 'data': values}], height=60 + 36 * max(len(shown), 1),
+        f'За районами{_when(rows)}. {ctx.cur.upper()}{ctx.per_month}.{top}',
+        type='hbar', unit=ctx.symbol, categories=[r.district.name_uk for r in shown],
+        series=[{'name': 'Медіана', 'data': [value(r) for r in shown]}], height=60 + 36 * max(len(shown), 1),
     )
 
 
-def _average_by_district(endpoint, ctx, title, subtitle):
-    data = latest(endpoint, ctx.city) or []
-    rows = sorted(data, key=lambda r: -(r.averageUsd or 0))[:MAX_DISTRICTS]
-    when = f' на {rows[0].month:%d.%m.%Y}' if rows else ''
-    names = [r.label if isinstance(r.label, str) else r.label.uk for r in rows]
-    return _spec(title, subtitle + when + '.', type='hbar', unit=ctx.symbol, categories=names,
-                 series=[{'name': 'Медіана', 'data': [_usd_uah(ctx, r.averageUsd, r.averageUah) for r in rows]}],
+def _average_by_district(item, ctx, title, subtitle):
+    rows = list(_latest(m.DistrictAveragePrice.objects.filter(district__city=ctx.city, item=item))
+                .select_related('district'))
+    rows = sorted(rows, key=lambda r: -(r.avg_usd or 0))[:MAX_DISTRICTS]
+    return _spec(title, subtitle + _when(rows) + '.', type='hbar', unit=ctx.symbol,
+                 categories=[r.district.name_uk for r in rows],
+                 series=[{'name': 'Медіана', 'data': [_f(_usd_uah(ctx, r.avg_usd, r.avg_uah)) for r in rows]}],
                  height=60 + 44 * max(len(rows), 1))
 
 
 def primary_districts(ctx: Ctx):
-    return _average_by_district('districts', ctx, 'Новобудови: стартова ціна м² за районами',
+    return _average_by_district(m.DistrictAveragePrice.Item.FLAT_M2, ctx, 'Новобудови: стартова ціна м² за районами',
                                 f'Медіана стартової ціни від забудовників, {ctx.cur.upper()}')
 
 
 def parking_districts(ctx: Ctx):
-    return _average_by_district('parking-districts', ctx, 'Паркомісце в новобудові за районами',
+    return _average_by_district(m.DistrictAveragePrice.Item.PARKING, ctx, 'Паркомісце в новобудові за районами',
                                 f'Медіана стартової ціни, {ctx.cur.upper()}')
 
 
 # --- Market -----------------------------------------------------------------------------------------------
 
 def exposure(ctx: Ctx):
-    data = [r for r in latest('median-exposure', ctx.city) or [] if r.contractType == ctx.ct and r.roomCount in ROOM]
+    rows = m.ExposurePoint.objects.filter(city=ctx.city, contract_type=ctx.ct, room_count__in=SHOWN_ROOMS)
+    series, today = _lines(rows, lambda r: r.room_count, lambda r: r.date, lambda r: r.days, name=ROOM.get)
     verb = 'здається' if ctx.deal == 'rent' else 'продається'
-    return _spec(
-        f'Як швидко квартира {verb}', 'Медіанний строк експозиції оголошення, днів.',
-        unit='дн.', series=_series_by(data, lambda r: r.roomCount, lambda r: r.dateStr, lambda r: r.exposure,
-                                      name=lambda g: ROOM[g]),
-        preliminary=_today(data, lambda r: r.dateStr),
-    )
+    return _spec(f'Як швидко квартира {verb}', 'Медіанний строк експозиції оголошення, днів.', unit='дн.',
+                 series=series, preliminary=today)
 
 
 def _bucket_label(start, end, symbol):
     def short(v):
+        v = float(v)
         return f'{v / 1000:g} тис.' if v >= 1000 else f'{v:g}'
     return f'від {short(start)} {symbol}' if end is None else f'{short(start)}–{short(end)} {symbol}'
 
 
 def price_distribution(ctx: Ctx):
     # one room count: their buckets have different bounds, side by side they interleave
-    data = [r for r in latest('price-distribution', ctx.city) or []
-            if r.contractTypeId == ctx.ct and r.roomCount == ctx.room]
-    currency = 1 if ctx.cur == 'usd' else 2
-    rows = [r for r in data if r.currencyId == currency]
-    note = ''
-    if not rows and data:  # sale is published in USD only
-        rows, currency, note = [r for r in data if r.currencyId == 1], 1, ' ЛУН публікує продаж лише в USD.'
-    symbol = '$' if currency == 1 else '₴'
-    buckets = sorted({(r.priceStart, r.priceEnd) for r in rows}, key=lambda b: b[0])
-    counts = defaultdict(int)
-    for r in rows:
-        counts[(r.roomCount, r.priceStart, r.priceEnd)] += r.count
-    rooms = sorted({r.roomCount for r in rows})
+    base = m.PriceBucket.objects.filter(city=ctx.city, contract_type=ctx.ct, room_count=ctx.room)
+    rows = list(_latest(base.filter(currency=ctx.cur)))
+    currency, note = ctx.cur, ''
+    if not rows:  # sale is published in USD only
+        rows = list(_latest(base.filter(currency='usd')))
+        currency, note = 'usd', ' ЛУН публікує продаж лише в USD.' if rows else ''
+    rows.sort(key=lambda r: r.price_from)
+    buckets = [(r.price_from, r.price_to) for r in rows]
+    counts = [r.cnt for r in rows]
     # LUN sends ~80 narrow buckets with a long, almost empty tail: keep the ones holding 97% of the listings and
     # fold the rest into one "from X" bucket
-    totals = [sum(counts[(room, s, e)] for room in rooms) for s, e in buckets]
-    grand, running, cut = sum(totals), 0, len(buckets)
-    for i, total in enumerate(totals):
-        running += total
+    grand, running, cut = sum(counts), 0, len(buckets)
+    for i, count in enumerate(counts):
+        running += count
         if grand and running >= 0.97 * grand:
             cut = i + 1
             break
     if cut < len(buckets) - 1:
-        start = buckets[cut][0]
-        for room in rooms:
-            counts[(room, start, None)] = sum(counts[(room, s, e)] for s, e in buckets[cut:])
-        buckets = buckets[:cut] + [(start, None)]
-    when = f' на {rows[0].date:%d.%m.%Y}' if rows else ''
+        buckets = buckets[:cut] + [(buckets[cut][0], None)]
+        counts = counts[:cut] + [sum(counts[cut:])]
     return _spec(
         'Найпоширеніші ціни' + (' оренди' if ctx.deal == 'rent' else '') + f', {ROOM[ctx.room]}',
-        f'Кількість оголошень за ціновими інтервалами{when}.{note}', type='bar', unit='оголош.',
-        categories=[_bucket_label(s, e, symbol) for s, e in buckets],
-        series=[{'name': ROOM[room], 'data': [counts.get((room, s, e), 0) for s, e in buckets]} for room in rooms],
-        height=360,
+        f'Кількість оголошень за ціновими інтервалами{_when(rows)}.{note}', type='bar', unit='оголош.',
+        categories=[_bucket_label(s, e, SYMBOL[currency]) for s, e in buckets],
+        series=[{'name': ROOM[ctx.room], 'data': counts}] if rows else [], height=360,
     )
 
 
 def listing_vs_deal(ctx: Ctx):
-    data = [r for r in latest('rieltor', ctx.city) or [] if r.contractType == ctx.ct and r.roomCount == ctx.room]
-    listing = [_P(r.dateStr, _usd_uah(ctx, r.priceUsd, r.price)) for r in data]
-    deal = [_P(r.dateStr, _usd_uah(ctx, r.dealPriceUsd, r.dealPrice)) for r in data]
+    rows = list(m.DealPricePoint.objects.filter(city=ctx.city, contract_type=ctx.ct, room_count=ctx.room))
+    listing, today = _lines(rows, lambda r: 'listing', lambda r: r.date,
+                            lambda r: _usd_uah(ctx, r.listing_usd, r.listing_uah))
+    deal, _ = _lines(rows, lambda r: 'deal', lambda r: r.date, lambda r: _usd_uah(ctx, r.deal_usd, r.deal_uah))
     return _spec(
         f'Ціна в оголошенні і ціна угоди, {ROOM[ctx.room]}',
-        f'Медіани за даними рієлторів, {ctx.cur.upper()}{ctx.per_month}. Різниця — торг.',
-        unit=ctx.symbol, series=[{'name': 'В оголошенні', 'data': _line(listing)},
-                                 {'name': 'Угода', 'data': _line(deal)}],
-        preliminary=_today(data, lambda r: r.dateStr),
+        f'Медіани за даними рієлторів, {ctx.cur.upper()}{ctx.per_month}. Різниця — торг.', unit=ctx.symbol,
+        series=[{**s, 'name': name} for s, name in ((listing[0], 'В оголошенні'), (deal[0], 'Угода'))] if rows else [],
+        preliminary=today,
     )
 
 
 # --- Affordability ----------------------------------------------------------------------------------------
 
 def salary_history(ctx: Ctx):
-    data = [r for r in latest('salary-history', ctx.city) or [] if r.contractTypeId == ctx.ct and r.roomCount in ROOM]
+    rows = m.AffordabilityPoint.objects.filter(city=ctx.city, contract_type=ctx.ct, room_count__in=SHOWN_ROOMS)
     if ctx.deal == 'rent':
         title, subtitle, unit, digits = ('Частка зарплати, що йде на оренду',
                                          'Медіанна оренда у % від медіанної зарплати (work.ua).', '%', 0)
     else:
         title, subtitle, unit, digits = ('Ціна квартири в роках зарплати',
                                          'Скільки років відкладати всю медіанну зарплату (work.ua).', 'р.', 1)
-    return _spec(title, subtitle, unit=unit, digits=digits,
-                 series=_series_by(data, lambda r: r.roomCount, lambda r: r.date.date(), lambda r: r.value,
-                                   name=lambda g: ROOM[g]),
-                 preliminary=_today(data, lambda r: r.date.date()))
+    series, today = _lines(rows, lambda r: r.room_count, lambda r: r.date, lambda r: r.value, name=ROOM.get)
+    return _spec(title, subtitle, unit=unit, digits=digits, series=series, preliminary=today)
 
 
 def salary_positions(ctx: Ctx):
-    data = [r for r in latest('salary-positions', ctx.city) or []
-            if r.contractTypeId == ctx.ct and r.roomCount in ROOM]
-    professions = sorted({r.nameUa for r in data},
-                         key=lambda n: next((r.salary or 0) for r in data if r.nameUa == n))
-    value = {(r.roomCount, r.nameUa): r.value for r in data}
-    rooms = sorted({r.roomCount for r in data})
+    rows = list(_latest(m.ProfessionAffordability.objects.filter(
+        city=ctx.city, contract_type=ctx.ct, room_count__in=SHOWN_ROOMS)))
+    salary = {r.profession_uk: r.salary or 0 for r in rows}
+    professions = sorted(salary, key=salary.get)
+    value = {(r.room_count, r.profession_uk): _f(r.value) for r in rows}
+    rooms = sorted({r.room_count for r in rows})
     rent = ctx.deal == 'rent'
     return _spec(
         'Частка зарплати на оренду за професіями' if rent else 'Ціна квартири в роках зарплати за професіями',
@@ -244,79 +238,60 @@ def salary_positions(ctx: Ctx):
 
 
 def sale_in_rent(ctx: Ctx):
-    data = [r for r in latest('sale-in-rent-history', ctx.city) or [] if r.roomCount in ROOM]
+    rows = m.RentPaybackPoint.objects.filter(city=ctx.city, room_count__in=SHOWN_ROOMS)
+    series, today = _lines(rows, lambda r: r.room_count, lambda r: r.date, lambda r: r.years, name=ROOM.get)
     return _spec('Ціна квартири в роках оренди', 'За скільки років оренда окупає купівлю тієї ж квартири.',
-                 unit='р.', digits=1,
-                 series=_series_by(data, lambda r: r.roomCount, lambda r: r.date, lambda r: r.value,
-                                   name=lambda g: ROOM[g]),
-                 preliminary=_today(data, lambda r: r.date))
+                 unit='р.', digits=1, series=series, preliminary=today)
 
 
 def pets_rent(ctx: Ctx):
-    rows = [r for r in latest('pets-rent', None) or []
-            if r.cityId == ctx.city.id and r.realtyType == 'flat' and r.regionType == 'city']
-    row = rows[0] if rows else None
+    row = _latest(m.PetsRentShare.objects.filter(city=ctx.city, realty_type='flat', scope='city')).first()
     return _spec(
         'Оренда з домашніми тваринами', 'Частка оголошень квартир.', type='donut', unit='%', digits=1,
         labels=['Можна', 'За домовленістю', 'Не можна', 'Не вказано'],
-        values=[row.yesPercent, row.somePercent, row.noPercent, row.unknownPercent] if row else [],
+        values=[row.allowed, row.by_agreement, row.forbidden, row.unknown] if row else [],
         empty='ЛУН публікує це лише для Києва та Львова.',
     )
 
 
 # --- New buildings ----------------------------------------------------------------------------------------
 
-CLASS_NAMES = {'економ': 'Економ', 'комфорт': 'Комфорт', 'бізнес': 'Бізнес', 'преміум': 'Преміум'}
-CLASS_ORDER = ['Економ', 'Комфорт', 'Бізнес', 'Преміум']
-
-
 def primary_classes(ctx: Ctx):
-    data = latest('price', ctx.city)
-    items = []
-    if data is not None:
-        items = [(CLASS_NAMES.get(r.label, r.label), r) for r in data.cityClasses]
-        items += [('Середня по місту', r) for r in data.cityAvg]
-    # 0 = no listings that month (spring 2022): a gap, not a price
-    series = _series_by(items, lambda i: i[0], lambda i: i[1].monthDate,
-                        lambda i: _usd_uah(ctx, i[1].averageUsd, i[1].averageUah) or None,
-                        order=CLASS_ORDER + ['Середня по місту'])
+    rows = m.PrimaryClassPrice.objects.filter(city=ctx.city, scope='city')
+    series, today = _lines(rows, lambda r: r.housing_class, lambda r: r.month,
+                           lambda r: _usd_uah(ctx, r.avg_usd, r.avg_uah), name=CLASS_NAMES.get,
+                           order=list(CLASS_NAMES))
     return _spec('Новобудови: стартова ціна м² за класами',
                  f'Медіана стартової ціни від забудовників, {ctx.cur.upper()}.', unit=ctx.symbol, series=series,
-                 preliminary=[i[1].monthDate.isoformat() for i in items if i[1].isToday])
+                 preliminary=today)
 
 
-PARKING_CLASSES = {1: 'Економ', 4: 'Комфорт', 2: 'Бізнес', 3: 'Преміум'}  # LUN's classId, in display order
+PARKING_ORDER = ['economy', 'comfort', 'business', 'premium']
 
 
 def parking_classes(ctx: Ctx):
-    data = latest('parking-classes', ctx.city) or []
-    value = {(r.regionType, r.classId): _usd_uah(ctx, r.medianUsd, r.medianUah) for r in data}
+    rows = _latest(m.ParkingClassPrice.objects.filter(city=ctx.city))
+    value = {(r.scope, r.housing_class): _f(_usd_uah(ctx, r.median_usd, r.median_uah)) for r in rows}
     return _spec('Паркомісце в новобудові за класом будинку', f'Медіана стартової ціни, {ctx.cur.upper()}.',
-                 type='bar', unit=ctx.symbol, categories=list(PARKING_CLASSES.values()),
-                 series=[{'name': name, 'data': [value.get((region, c)) for c in PARKING_CLASSES]}
-                         for region, name in (('city', 'Місто'), ('region', 'Область'))
-                         if any((region, c) in value for c in PARKING_CLASSES)])
-
-
-def _latest_year(rows):
-    return max((r.year for r in rows), default=None)
+                 type='bar', unit=ctx.symbol, categories=[CLASS_NAMES[c] for c in PARKING_ORDER],
+                 series=[{'name': name, 'data': [value.get((scope, c)) for c in PARKING_ORDER]}
+                         for scope, name in (('city', 'Місто'), ('region', 'Область'))
+                         if any((scope, c) in value for c in PARKING_ORDER)])
 
 
 def developers_ranking(ctx: Ctx):
-    data = latest('developers-ranking', ctx.city) or []
-    year = _latest_year(data)
-    rows = sorted((r for r in data if r.year == year), key=lambda r: -r.count)[:10]
+    rows = list(_latest(m.DeveloperRank.objects.filter(city=ctx.city), 'year').order_by('-flats')[:10])
+    year = rows[0].year if rows else None
     return _spec(f'Топ забудовників за зданими квартирами{f", {year}" if year else ""}',
                  'Місто та область, за сертифікатами про введення в експлуатацію.', type='hbar', unit='кв.',
-                 categories=[r.name for r in rows], series=[{'name': 'Здано квартир', 'data': [r.count for r in rows]}],
+                 categories=[r.name for r in rows], series=[{'name': 'Здано квартир', 'data': [r.flats for r in rows]}],
                  height=60 + 36 * max(len(rows), 1))
 
 
 def developers_share(ctx: Ctx):
-    data = latest('developers-distribution', ctx.city) or []
-    year = _latest_year(data)
-    rows = sorted((r for r in data if r.year == year), key=lambda r: -r.value)
-    labels, values = [r.name for r in rows], [r.value for r in rows]
+    rows = list(_latest(m.DeveloperShare.objects.filter(city=ctx.city), 'year').order_by('-share_pct'))
+    year = rows[0].year if rows else None
+    labels, values = [r.name for r in rows], [r.share_pct for r in rows]
     rest = round(100 - sum(values), 1)
     if rows and rest > 0.5:
         labels.append('Інші')
@@ -325,78 +300,78 @@ def developers_share(ctx: Ctx):
                  digits=1, labels=labels, values=values)
 
 
-def _city_region_bar(endpoint, ctx, title, subtitle, keys):
-    data = latest(endpoint, None) or {}
-    entry = data.get(ctx.city.id)
-    series = []
-    if entry is not None:
-        series = [{'name': name, 'data': [getattr(entry, part).get(k, 0) for k in keys]}
-                  for part, name in (('city', ctx.city.name), ('region', 'Область'))]
-        if not any(any(s['data']) for s in series):
-            series = []
-    return _spec(title, subtitle, type='bar', categories=list(keys.values()), series=series)
+def _city_region_bar(model, ctx, title, subtitle, fields):
+    rows = {r.scope: r for r in _latest(model.objects.filter(city=ctx.city))}
+    series = [{'name': name, 'data': [getattr(rows[scope], f) for f in fields]}
+              for scope, name in (('city', ctx.city.name), ('region', 'Область')) if scope in rows]
+    if not any(any(s['data']) for s in series):
+        series = []
+    return _spec(title, subtitle, type='bar', categories=list(fields.values()), series=series)
 
 
 def construction(ctx: Ctx):
-    return _city_region_bar('sections', ctx, 'Активність будівництва', 'Секцій житлових комплексів.', {
-        'active': 'У продажу', 'under_construct': 'Будується', 'preparatory_work': 'Котловани',
+    return _city_region_bar(m.ConstructionStat, ctx, 'Активність будівництва', 'Секцій житлових комплексів.', {
+        'on_sale': 'У продажу', 'under_construction': 'Будується', 'preparatory': 'Котловани',
         'built': 'Збудовано з 2010',
     })
 
 
 def lending(ctx: Ctx):
-    return _city_region_bar('lending', ctx, 'Новобудови з довгостроковими виплатами', 'Кількість житлових комплексів.', {
-        'installments': 'Розтермінування від забудовника', 'mortgagesYeOselya': 'Іпотека «єОселя»', 'credits': 'Кредит',
-    })
+    return _city_region_bar(m.LendingStat, ctx, 'Новобудови з довгостроковими виплатами',
+                            'Кількість житлових комплексів.', {
+                                'installments': 'Розтермінування від забудовника', 'mortgages': 'Іпотека «єОселя»',
+                                'credits': 'Кредит',
+                            })
 
 
 def commissioning(ctx: Ctx):
-    data = [r for r in latest('dssu', None) or [] if r.regionId == ctx.city.id]
-    years = defaultdict(lambda: [0.0, 0.0, 0])
-    for r in data:
-        years[r.year][0] += r.allBuildings or 0
-        years[r.year][1] += r.apartmentBuildings or 0
-        years[r.year][2] = max(years[r.year][2], r.quarter)
+    """quarter 0 is the State Statistics' total for the year; a year without it yet is the sum of its quarters."""
+    totals, quarters = {}, defaultdict(lambda: [0.0, 0.0, 0])
+    for r in m.HousingCommissioning.objects.filter(region_id=ctx.city.id):
+        if r.quarter == 0:
+            totals[r.year] = [r.all_m2 or 0, r.apartment_m2 or 0, 4]
+        else:
+            quarters[r.year][0] += r.all_m2 or 0
+            quarters[r.year][1] += r.apartment_m2 or 0
+            quarters[r.year][2] = max(quarters[r.year][2], r.quarter)
+    years = {**quarters, **totals}
     ordered = sorted(years)[-9:]
     last = f' (за {years[ordered[-1]][2]} кв.)' if ordered and years[ordered[-1]][2] < 4 else ''
-    return _spec('Введення житла в експлуатацію', f'Область, Держстат, млн м² на рік{last}.', type='bar', unit='млн м²',
-                 digits=2, categories=[str(y) for y in ordered],
+    return _spec('Введення житла в експлуатацію', f'Область, Держстат, млн м² на рік{last}.', type='bar',
+                 unit='млн м²', digits=2, categories=[str(y) for y in ordered],
                  series=[{'name': 'Усе житло', 'data': [round(years[y][0] / 1e6, 3) for y in ordered]},
                          {'name': 'Багатоквартирні', 'data': [round(years[y][1] / 1e6, 3) for y in ordered]}])
 
 
 # --- Houses -----------------------------------------------------------------------------------------------
 
-def _houses(ctx, metric):
-    data = latest('houses-price-history', ctx.city, ctx.ct) or []
-    region_names = {'city': ctx.city.name, 'region': 'Область'}
-    field = (lambda r: _usd_uah(ctx, r.medianUsd, r.medianUah)) if metric == 'price' else \
-        (lambda r: _usd_uah(ctx, r.medianM2Usd, r.medianM2Uah))
-    return data, _series_by(data, lambda r: r.regionType, lambda r: r.date, field,
-                            name=lambda g: region_names.get(g, g), order=['city', 'region'])
+def _houses(ctx, usd, uah):
+    rows = m.HousePricePoint.objects.filter(city=ctx.city, contract_type=ctx.ct)
+    names = {'city': ctx.city.name, 'region': 'Область'}
+    return _lines(rows, lambda r: r.scope, lambda r: r.date,
+                  lambda r: _usd_uah(ctx, getattr(r, usd), getattr(r, uah)), name=names.get,
+                  order=['city', 'region'])
 
 
 def houses_price(ctx: Ctx):
-    data, series = _houses(ctx, 'price')
+    series, today = _houses(ctx, 'median_usd', 'median_uah')
     return _spec(f'Будинки: медіанна ціна{" оренди" if ctx.deal == "rent" else ""}',
-                 f'{ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol, series=series,
-                 preliminary=_today(data, lambda r: r.date))
+                 f'{ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol, series=series, preliminary=today)
 
 
 def houses_m2(ctx: Ctx):
-    data, series = _houses(ctx, 'm2')
+    series, today = _houses(ctx, 'median_m2_usd', 'median_m2_uah')
     return _spec('Будинки: медіанна ціна м²', f'{ctx.cur.upper()}{ctx.per_month}.', unit=ctx.symbol, series=series,
-                 digits=0 if ctx.cur == 'uah' or ctx.deal == 'sale' else 2,
-                 preliminary=_today(data, lambda r: r.date))
+                 digits=0 if ctx.cur == 'uah' or ctx.deal == 'sale' else 2, preliminary=today)
 
 
 def houses_districts(ctx: Ctx):
-    data = [r for r in latest('districts-house-price', ctx.city) or [] if r.contractTypeId == ctx.ct]
-    rows = sorted(data, key=lambda r: -(r.medianUsd or 0))
-    when = f' на {rows[0].date:%d.%m.%Y}' if rows else ''
-    return _spec('Будинки: медіанна ціна за районами', f'USD{when}. ЛУН публікує лише продаж у USD.',
-                 type='hbar', unit='$', categories=[r.nameUk for r in rows],
-                 series=[{'name': 'Медіана', 'data': [r.medianUsd for r in rows]}],
+    rows = list(_latest(m.HouseDistrictPrice.objects.filter(district__city=ctx.city, contract_type=ctx.ct))
+                .select_related('district'))
+    rows.sort(key=lambda r: -(r.median_usd or 0))
+    return _spec('Будинки: медіанна ціна за районами', f'USD{_when(rows)}. ЛУН публікує лише продаж у USD.',
+                 type='hbar', unit='$', categories=[r.district.name_uk for r in rows],
+                 series=[{'name': 'Медіана', 'data': [_f(r.median_usd) for r in rows]}],
                  height=60 + 44 * max(len(rows), 1))
 
 

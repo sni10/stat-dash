@@ -5,7 +5,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from collector.models import City, CollectRun, LunPriceSnapshot
+from collector import models as m
+from collector.models import City, CollectRun, FlatPricePoint
 from collector.service import collect
 from collector.tests.factories import SALE, FakeClient, all_answers, answers, flat_price_history
 from dashboard import charts, queries
@@ -51,7 +52,7 @@ class QueriesTests(TestCase):
     def test_no_year_ago_point_within_tolerance(self):
         data = answers()
         data[SALE] = flat_price_history(115, 1, dates=[dt.date(2025, 12, 24)], today=dt.date(2026, 1, 10))
-        LunPriceSnapshot.objects.all().delete()
+        FlatPricePoint.objects.all().delete()
         load(data)
         kpi = queries.overview(queries.Filters(self.odesa))
         self.assertIsNone(kpi['m2_yoy'])
@@ -265,6 +266,7 @@ class ChartBuilderTests(TestCase):
         self.assertEqual(charts.lending(self.ctx())['series'][0]['data'], [37, 7, 1])
         dssu = charts.commissioning(self.ctx())
         self.assertEqual(dssu['categories'], ['2025', '2026'])
+        # 2025: the year's total (quarter 0), not total + quarters; 2026: no total yet -> its quarters 1-3
         self.assertEqual(dssu['series'][0]['data'], [1.0, 0.6])
         self.assertIn('за 3 кв.', dssu['subtitle'])
 
@@ -291,10 +293,14 @@ class ChartBuilderTests(TestCase):
 
     def test_string_district_label(self):
         from collector.tests.factories import average_by_district
+        # as in Kyiv's real answer: towns next to the city come as plain text with isCity, ids clash with districts
         districts = average_by_district()
-        districts['data'][0]['label'] = 'Київ'
+        districts['data'].append({**districts['data'][0], 'label': 'Вишневе', 'isCity': True})
         load({('districts', None): districts})
-        self.assertIn('Київ', charts.primary_districts(self.ctx())['categories'])
+        categories = charts.primary_districts(self.ctx())['categories']
+        self.assertIn('Вишневе', categories)
+        self.assertIn('Київський', categories)  # the district with the same id stays a district
+        self.assertEqual(m.District.objects.filter(city=self.odesa, lun_id=11).count(), 2)
 
     def test_city_without_data_says_so(self):
         lviv = charts.Ctx(City.objects.get(slug='lviv'))

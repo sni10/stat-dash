@@ -10,7 +10,7 @@ from collector.service import collect, is_stale, try_lock, unlock
 
 
 class Command(BaseCommand):
-    help = 'Collect LUN statistics for enabled cities into lun_raw / lun_price_snapshot (one collect_run row).'
+    help = 'Collect LUN statistics for enabled cities into lun_raw / flat_price_point (one collect_run row).'
 
     def add_arguments(self, parser):
         parser.add_argument(

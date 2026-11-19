@@ -218,8 +218,10 @@ def developers_distribution(city_id=115):
 
 
 def dssu():
-    return _ok([{'year': y, 'quarter': q, 'regionId': r, 'allBuildings': 100000.0 * q, 'apartmentBuildings': 50000.0 * q}
-                for y in (2025, 2026) for q in (1, 2, 3, 4) for r in (115, 10000) if (y, q) != (2026, 4)])
+    """Quarters 1-4 and, for finished years, quarter 0 = the year's total (as State Statistics sends it)."""
+    return _ok([{'year': y, 'quarter': q, 'regionId': r, 'allBuildings': 100000.0 * (q or 10),
+                 'apartmentBuildings': 50000.0 * (q or 10)}
+                for y in (2025, 2026) for q in (0, 1, 2, 3, 4) for r in (115, 10000) if (y, q) not in ((2026, 0), (2026, 4))])
 
 
 def city_region_counts(**counts):

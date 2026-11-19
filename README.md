@@ -60,7 +60,10 @@ Open http://localhost:8010 and sign in. The first collection takes about 20–25
 docker compose up -d db && uv sync && uv run python manage.py test     # tests
 (cd frontend && npm ci && npm run build)                               # after changing templates
 DEPLOY_SERVER=deploy@<server> bash deploy/deploy.sh <commit sha>       # deploy a CI image to a server
+docker compose exec web python manage.py reparse_lun                   # rebuild the tables from the raw archive
 ```
+
+Every LUN answer is archived raw and parsed into one table per entity: see [docs/data-model.md](docs/data-model.md).
 
 Every push to `main` is tested, released (version tag + GitHub Release) and built into a Docker image automatically.
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). UI theme:

@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from collector.lun.client import LunBlocked, LunError
-from collector.models import City, CollectRun, LunPriceSnapshot, LunRaw
+from collector.models import City, CollectRun, FlatPricePoint, LunRaw
 from collector.service import collect, is_stale
 
 from .factories import (
@@ -32,7 +32,7 @@ class CollectTests(TestCase):
         return collect(cities, endpoints=CORE, client=client, sleep=no_sleep, alert=self.alerts.append)
 
     def snapshots(self, **filters):
-        return LunPriceSnapshot.objects.filter(city=self.odesa, **filters)
+        return FlatPricePoint.objects.filter(city=self.odesa, **filters)
 
     def test_first_run_loads_the_whole_history(self):
         run = self.run_collect(FakeClient(answers()))
@@ -42,7 +42,7 @@ class CollectTests(TestCase):
         self.assertEqual(self.snapshots(contract_type=1).count(), 52)
         self.assertEqual(self.snapshots(contract_type=2).count(), 52)
         self.assertEqual(self.snapshots(is_today=True).count(), 8)
-        self.assertEqual(run.rows_upserted, 104)
+        self.assertEqual(run.rows_upserted, 104 + 5)  # + 5 rows of the `price` answer (primary_class_price)
         self.assertEqual(LunRaw.objects.count(), 3)
         self.assertEqual(self.alerts, [])
 
@@ -59,7 +59,8 @@ class CollectTests(TestCase):
         self.assertEqual(second.status, CollectRun.Status.OK)
         self.assertEqual(self.snapshots().count(), 104)
         self.assertEqual(LunRaw.objects.count(), 3)  # same data -> no new raw rows
-        self.assertEqual(second.rows_upserted, 8)  # only the "today" points are rewritten
+        # the flat "today" points are rewritten (8); the other tables are upserted whole (5 rows of `price`)
+        self.assertEqual(second.rows_upserted, 8 + 5)
 
     def test_new_today_point_replaces_the_old_one(self):
         self.run_collect(FakeClient(answers()))
@@ -93,7 +94,7 @@ class CollectTests(TestCase):
         row = self.snapshots(contract_type=1, snap_date=dt.date(2025, 1, 24), room_count=1).get()
         self.assertEqual(float(row.median_m2_usd), 1005.0)
         self.assertEqual(LunRaw.objects.filter(endpoint='flat-price-history', params__contractTypeId=1).count(), 2)
-        self.assertEqual(run.rows_upserted, 48 + 8)
+        self.assertEqual(run.rows_upserted, 48 + 8 + 5)
 
     def test_schema_error_keeps_raw_skips_parsing_and_alerts(self):
         broken = answers()
@@ -155,7 +156,7 @@ class CollectTests(TestCase):
         kyiv.save()
         run = self.run_collect(ByCityClient())
         self.assertEqual(run.status, CollectRun.Status.OK)
-        self.assertEqual(LunPriceSnapshot.objects.filter(city=kyiv).count(), 104)
+        self.assertEqual(FlatPricePoint.objects.filter(city=kyiv).count(), 104)
 
     def test_price_endpoint_is_archived_and_validated(self):
         bad = answers()

@@ -15,7 +15,7 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra='allow')
 
 
-# --- flat-price-history (normalized into lun_price_snapshot) ---------------------------------------------------
+# --- flat-price-history (normalized into flat_price_point) ---------------------------------------------------
 
 class FlatPricePoint(_Model):
     cityId: int
@@ -80,6 +80,7 @@ class MarketDistrict(_Model):
     cityId: int
     districtId: int
     districtName: str | None
+    districtNameEng: str | None = None
     contractTypeId: int
     roomCount: int
     median: Num
@@ -92,6 +93,8 @@ class MarketDistrict(_Model):
     medianM2TotalRenovated: Num = None
     medianM2TotalNotRenovated: Num = None
     count: int | None
+    countRenovated: int | None = None
+    countNotRenovated: int | None = None
     usdToUah: Num = None
     date: dt.datetime
 
@@ -118,6 +121,10 @@ class RieltorPoint(_Model):
     dealPrice: Num
     priceUsd: Num
     dealPriceUsd: Num
+    priceM2: Num = None
+    dealPriceM2: Num = None
+    priceUsdM2: Num = None
+    dealPriceUsdM2: Num = None
 
 
 # --- affordability -------------------------------------------------------------------------------------------
@@ -132,6 +139,7 @@ class SalaryPoint(_Model):
     value: Num
     price: Num
     salary: Num
+    count: int | None = None
 
 
 class SalaryPosition(_Model):
@@ -140,8 +148,11 @@ class SalaryPosition(_Model):
     roomCount: int
     date: dt.datetime
     nameUa: str
+    nameEn: str | None = None
     value: Num
     salary: Num
+    price: Num = None
+    url: str | None = None
 
 
 class SaleInRentPoint(_Model):
@@ -159,6 +170,7 @@ class PetsRent(_Model):
     realtyType: str
     regionType: str
     count: int | None
+    date: dt.datetime | None = None
     yesPercent: Num
     somePercent: Num
     noPercent: Num
@@ -186,6 +198,7 @@ class DistrictHousePrice(_Model):
     cityId: int
     districtId: int
     nameUk: str
+    nameEn: str | None = None
     contractTypeId: int
     date: dt.datetime
     medianUsd: Num
@@ -198,6 +211,7 @@ class DistrictHousePrice(_Model):
 
 class Label(_Model):
     uk: str
+    en: str | None = None
 
 
 class AverageByDistrict(_Model):
@@ -209,6 +223,7 @@ class AverageByDistrict(_Model):
     averageUsd: Num
     count: int | None
     month: dt.datetime
+    isCity: bool = False  # Kyiv's new-building answer: a town next to the city, not a district
 
 
 class ParkingClass(_Model):
